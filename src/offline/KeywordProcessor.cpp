@@ -1,11 +1,156 @@
-#include <iostream>
-using std::cin;
-using std::cout;
-using std::endl;
+#include "offline/KeywordProcessor.h"
+#include "common/DirectoryScanner.h"
+#include "common/TextUtils.h"
+#include "common/Utils.h"
 
-int main(int argc,char *argv[])
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+
+//构造函数 加载停用词
+KeywordProcessor::KeywordProcessor()
+:_tokenizer()
 {
-    
-    return 0;
+    _enStopWords=load_stop_words("../data/stopwords/en_stopwords.txt");
+    _cnStopWords=load_stop_words("../data/stopwords/cn_stopwords.txt");
+    std::cout<<"[Keyword] Loaded"<<_enStopWords.size()
+             <<" English +"<<_cnStopWords.size()
+             <<" Chinese stopwords"<<std::endl;
 }
 
+// 主程序
+void KeywordProcessor::process(const std::string& cnDir,
+                               const std::string& enDir)
+{
+    create_en_dict(enDir, "../data/index/dict_en.dat");
+    build_en_index("../data/index/dict_en.dat", "../data/index/index_en.dat");
+    create_cn_dict(cnDir, "../data/index/dict_cn.dat");
+    build_cn_index("../data/index/dict_cn.dat", "../data/index/index_cn.dat");
+}
+
+void KeywordProcessor::create_en_dict(const std::string& dir,
+                                      const std::string& outfile)
+{
+    // 1.扫描目录
+    auto files=DirectoryScanner::scan(dir);
+    std::cout<<"[Keyword] English files: "<<files.size()<<std::endl;
+
+    // 2.统计词频
+    std::map<std::string,int> freq;
+    for(const auto& filepath:files){
+        std::ifstream ifs(filepath);
+        std::string line;
+        while(std::getline(ifs,line)){
+            std::string norm=TextUtils::normalize_english_line(line);
+            std::istringstream iss(norm);
+            std::string word;
+            while(iss>>word){
+                if(_enStopWords.count(word)>0){continue;}
+                freq[word]++;
+            }
+        }
+    }
+
+    // 3.写入词典库
+    std::ofstream ofs(outfile);
+    for(const auto& [word,count]:freq){
+        ofs<<word<<" "<<count<<"\n";
+    }
+    std::cout<<"[Keyword] English dict size："<<freq.size()<<std::endl;
+}
+
+void KeywordProcessor::build_en_index(const std::string& dict,
+                    const std::string& index)
+{
+    // 1.读取字典，建立：首字母 -> 行号集合
+    std::map<char,std::set<int>> charIndex; //set 自动排序 + 去重
+    std::ifstream ifs(dict);
+    std::string word;
+    int freq;
+    int lineNo=1;
+
+    while(ifs>>word>>freq){
+        if(!word.empty()){
+            char first=word[0];
+            charIndex[first].insert(lineNo);
+        }
+        lineNo++;
+    }
+
+    // 2.写入索引库：“字符 行号1 行号2 行号3 ...”
+    std::ofstream ofs(index);
+    for(const auto& [ch,lines]:charIndex){
+        ofs<<ch;
+        for(int line:lines){
+            ofs<<" "<<line;
+        }
+        ofs<<"\n";
+    }
+
+    std::cout<<"[Keyword] English index keys: "<<charIndex.size()<<std::endl;
+}
+
+
+void KeywordProcessor::create_cn_dict(const std::string& dir,
+                    const std::string& outfile)
+{
+    auto files=DirectoryScanner::scan(dir);
+    std::cout<<"[Keyword] Chinese files: "<<files.size()<<std::endl;
+
+    std::map<std::string,int> freq;
+
+    for(const auto& filepath:files){
+        std::ifstream ifs(filepath);
+        std::string content((std::istreambuf_iterator<char>(ifs)),
+                             std::istreambuf_iterator<char>());
+
+        std::vector<std::string> words;
+        _tokenizer.Cut(content,words); //MIX模式分词
+
+        //统计词频
+        for(const auto& word: words){
+            if(_cnStopWords.count(word)>0){continue;}//停用词
+            if(TextUtils::is_chinese_punctuation_or_space(word)){continue;}//标点 空白
+            freq[word]++;
+        }
+    }
+
+    //写入词典库
+    std::ofstream ofs(outfile);
+    for(const auto& [word,count]:freq){
+        ofs<<word<<" "<<count<<"\n";
+    }
+
+    std::cout<<"[Keyword] Chinese dict size: "<<freq.size()<<std::endl;
+}
+
+void KeywordProcessor::build_cn_index(const std::string& dict,
+                                      const std::string& index)
+{
+    std::map<std::string,std::set<int>> charIndex;
+
+    std::ifstream ifs(dict);
+    std::string word;
+    int freq;
+    int lineNo=1;
+
+    while(ifs>>word>>freq){
+        auto chars=TextUtils::split_utf8_characters(word);
+        for(const auto& ch:chars){
+            charIndex[ch].insert(lineNo);
+        }
+        lineNo++;
+    }
+
+    std::ofstream ofs(index);
+    for(const auto& [ch,lines]:charIndex){
+        ofs<<ch;
+        for(int line:lines){
+            ofs<<" "<<line;
+        }
+        ofs<<"\n";
+    }
+
+    std::cout<<"[Keyword] Chinese index keys: "<<charIndex.size()<<std::endl;
+}
