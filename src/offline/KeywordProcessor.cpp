@@ -33,6 +33,7 @@ void KeywordProcessor::create_en_dict(const std::string& dir,
                                       const std::string& outfile)
 {
     // 1.扫描目录
+    // vector<string> 装读目录读到的文件
     auto files=DirectoryScanner::scan(dir);
     std::cout<<"[Keyword] English files: "<<files.size()<<std::endl;
 
@@ -64,31 +65,65 @@ void KeywordProcessor::build_en_index(const std::string& dict,
                     const std::string& index)
 {
     // 1.读取字典，建立：首字母 -> 行号集合
-    std::map<char,std::set<int>> charIndex; //set 自动排序 + 去重
+    //std::map<char,std::set<int>> charIndex; //set 自动排序 + 去重
+    // 1.读取字典，建立：前缀 -> 行号集合
+    std::map<std::string,std::set<int>> rawIndex;//暂存全量前缀索引
     std::ifstream ifs(dict);
     std::string word;
     int freq;
     int lineNo=1;
 
+    // 从输入流中读出一个string 再读出一个int
+    // 分别给word 和 freq
     while(ifs>>word>>freq){
-        if(!word.empty()){
-            char first=word[0];
-            charIndex[first].insert(lineNo);
+    //=====这个if是首字母 -> 行号版本======
+    //    if(!word.empty()){
+    //        char first=word[0];
+    //        charIndex[first].insert(lineNo);
+    //    }
+    //=====这里是 前缀 -> 行号 版本======
+        if(word.empty()){continue;}
+        //对单个词进行全量前缀索引
+        for(size_t len=1;len<=word.size();++len){
+            rawIndex[word.substr(0,len)].insert(lineNo);
         }
         lineNo++;
     }
 
+    // 扫描暂存的全量前缀索引，去掉冗余
+    std::map<std::string,std::set<int>> prefixIndex;
+    std::string lastKept; //上一个真正写入 prefixIndex 的 key
+    for(auto& [pref,lines]:rawIndex){
+        //长度为1的前缀必然保留
+        if(pref.size()==1){
+            prefixIndex[pref]=std::move(lines);
+            lastKept=pref;//保留此时的前缀用于下一循环时比较
+            continue;
+        }
+
+        // 与lastKept的行号进行比较
+        if(prefixIndex[lastKept]!=lines){
+            //行号集不同 -> 说明行号集缩小了 有分叉 -> 需保留
+            prefixIndex[pref]=std::move(lines);
+            lastKept=pref;//更新发生分叉的前缀
+        }
+        //如果行号集相同 -> 说明这个没有分叉，保留这个前缀是冗余的
+    }
+
     // 2.写入索引库：“字符 行号1 行号2 行号3 ...”
     std::ofstream ofs(index);
-    for(const auto& [ch,lines]:charIndex){
-        ofs<<ch;
+    // for(const auto& [ch,lines]:charIndex){
+    //     ofs<<ch;
+    for(const auto&[prefix,lines]:prefixIndex){
+        ofs<<prefix;
         for(int line:lines){
             ofs<<" "<<line;
         }
         ofs<<"\n";
     }
 
-    std::cout<<"[Keyword] English index keys: "<<charIndex.size()<<std::endl;
+    // std::cout<<"[Keyword] English index keys: "<<charIndex.size()<<std::endl;
+    std::cout<<"[Keyword] English index keys: "<<prefixIndex.size()<<std::endl;
 }
 
 
@@ -102,6 +137,7 @@ void KeywordProcessor::create_cn_dict(const std::string& dir,
 
     for(const auto& filepath:files){
         std::ifstream ifs(filepath);
+        //全文读入
         std::string content((std::istreambuf_iterator<char>(ifs)),
                              std::istreambuf_iterator<char>());
 

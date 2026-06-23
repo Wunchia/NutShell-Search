@@ -39,7 +39,7 @@ void PageProcessor::extract_documents(const std::string& dir)
     auto files=DirectoryScanner::scan(dir);
     std::cout<<"[Page] XML files: "<<files.size()<<std::endl;
 
-    int nextId=1;
+    int nextId=1;//doc.id是全局唯一的，需要定义在for之外保证跨文件也不重复
 
     for(const auto& filepath : files){
         tinyxml2::XMLDocument xml;
@@ -55,8 +55,8 @@ void PageProcessor::extract_documents(const std::string& dir)
 
         auto* item=channel->FirstChildElement("item");
         while(item){
+            //每轮重新构造doc 保证doc初始均为空
             Document doc;
-            doc.id=nextId++;
 
             //提取link
             auto* linkEl=item->FirstChildElement("link");
@@ -78,11 +78,15 @@ void PageProcessor::extract_documents(const std::string& dir)
                 doc.content=contentEl->GetText();
             }else if(descEl&&descEl->GetText()){
                 doc.content=descEl->GetText();
-            }else{
+            }
+
+            //只有link、title、content都成功拿到了才会push_back
+            if(doc.link.empty()||doc.title.empty()||doc.content.empty()){
                 item=item->NextSiblingElement("item");
                 continue;
             }
-
+            //确定入库后再分配id并自增，避免遇到问题item导致id虚增
+            doc.id=nextId++;
             _documents.push_back(std::move(doc));
             item=item->NextSiblingElement("item");
         }
