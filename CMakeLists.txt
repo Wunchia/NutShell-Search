@@ -14,13 +14,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 # 设置可执行文件的输出路径为项目根目录下的 bin 文件夹
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-# 头文件搜索路径
-# /usr/local/include: cppjieba, simhash, utfcpp 等 header-only 库的安装位置
-include_directories(
-    ${CMAKE_SOURCE_DIR}/include
-    /usr/local/include
-)
-
 # --- 查找系统依赖库 ---
 # 查找多线程库
 find_package(Threads REQUIRED)
@@ -51,16 +44,25 @@ target_link_libraries(muduo::muduo_net INTERFACE muduo::muduo_base)
 # =========================================================================
 file(GLOB COMMON_SOURCES CONFIGURE_DEPENDS "src/common/*.cpp")
 
+add_library(nutshell_common STATIC ${COMMON_SOURCES})
+
+# 公共模块需要访问 /usr/local/include (utfcpp 等)
+target_include_directories(nutshell_common PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+    /usr/local/include
+)
+
 # =========================================================================
 # 模块二：离线处理程序 (Offline Builder)
 # =========================================================================
 file(GLOB OFFLINE_SOURCES CONFIGURE_DEPENDS "src/offline/*.cpp")
 
 # 生成离线可执行文件 nutshell_offline
-add_executable(nutshell_offline ${OFFLINE_SOURCES} ${COMMON_SOURCES})
+add_executable(nutshell_offline ${OFFLINE_SOURCES})
 
 # 链接离线程序需要的库
 target_link_libraries(nutshell_offline
+    nutshell_common
     tinyxml2::tinyxml2
     Threads::Threads
 )
@@ -71,12 +73,13 @@ target_link_libraries(nutshell_offline
 file(GLOB ONLINE_SOURCES CONFIGURE_DEPENDS "src/online/*.cpp")
 
 # 生成在线可执行文件 nutshell_online
-add_executable(nutshell_online ${ONLINE_SOURCES} ${COMMON_SOURCES})
+add_executable(nutshell_online ${ONLINE_SOURCES})
 
-# 链接在线程序需要的库：muduo_net, muduo_base, nlohmann_json, pthread
+# 链接在线程序需要的库
+# muduo_net 已 INTERFACE 链接 muduo_base，不需重复
 target_link_libraries(nutshell_online
+    nutshell_common
     muduo::muduo_net
-    muduo::muduo_base
     nlohmann_json::nlohmann_json
     Threads::Threads
 )
