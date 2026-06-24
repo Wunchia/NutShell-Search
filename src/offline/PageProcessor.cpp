@@ -103,25 +103,29 @@ void PageProcessor::deduplicate_documents()
     std::vector<uint64_t> fingerprints;
 
     for(auto& doc:_documents){
+        //生成当前文档的指纹
         uint64_t hash=0;
         int topN=std::max(5,std::min(200,static_cast<int>(doc.content.size()/120)));
         _hasher.make(doc.content,topN,hash);
+        //这里生成的topN关键词在make中用完即弃 后面TF-IDF会另外再生成
 
         // 检查是否与已有文档重复
         bool duplicated=false;
         for(size_t i=0;i<fingerprints.size();++i){
+            //比较当前文档的hash和fingerprints中已保留的文档hash 如果汉明距离小于等3则判定为重复
             if(simhash::Simhasher::isEqual(hash, fingerprints[i])){
                 duplicated=true;
                 break;
             }
         }
 
+        //如果不重复 则该篇文档存入uniqueDocs 指纹存入fingerprints
         if(!duplicated){
             uniqueDocs.push_back(std::move(doc));
             fingerprints.push_back(hash);
         }
     }
-
+    //把去重后的文档放回_documents
     _documents=std::move(uniqueDocs);
     std::cout<<"[Page] Unique documents: "<<_documents.size()<<std::endl;
 }
@@ -146,10 +150,13 @@ void PageProcessor::build_pages_and_offsets(const std::string& pages,
         std::string page=oss.str();
 
         // 记录当前位置（偏移量）
+        // 第一次循环时这里调用tellp拿到的是起始字节位置
+        // 之后每次循环都刚好是下一篇的起始偏移
         std::streamoff offset=pageOfs.tellp();
-        pageOfs<<page;
+        pageOfs<<page;//这里才把本篇文档传入网页库
 
         // 写入偏移记录：id offset length
+        // 第一篇的起始偏移是0
         offsetOfs<<doc.id<<" "<<offset<<" "<<page.size()<<"\n";
     }
 }
@@ -162,23 +169,27 @@ void PageProcessor::build_inverted_index(const std::string&filename)
     // 第一遍：统计每篇文档的词频和文档频率
     std::map<int,std::map<std::string,int>> docTermCount; //docId -> (word->count)
     std::map<int,int> docTotalWords;                      //docId -> 总词数
-    std::map<std::string,int> documentFrequency;          //word -> DF
+
+    std::map<std::string,int> documentFrequency;          //word -> DF 包含该词的文档个数
 
     for(const auto& doc:_documents){
-        std::vector<std::string> words;
+        std::vector<std::string> words;//存分词结果 所有词
         _tokenizer.Cut(doc.content,words);
 
-        std::map<std::string,int> localFreq;
+        std::map<std::string,int> localFreq;//存词频 key唯一
         for(const auto& w:words){
-            if(_stopWords.count(w)>0){continue;}
-            if(TextUtils::is_chinese_punctuation_or_space(w)){continue;}
+            if(_stopWords.count(w)>0){continue;}//去停用词
+            if(TextUtils::is_chinese_punctuation_or_space(w)){continue;}//去标点
             localFreq[w]++;
         }
 
+        //存入docTermCount （TF 词语在文档中出现的次数）
         docTermCount[doc.id]=localFreq;
+        //汇总总词数
         docTotalWords[doc.id]=0;
         for(const auto& [word,cnt]:localFreq){
-            docTotalWords[doc.id]+=cnt;
+            docTotalWords[doc.id]+=cnt;//累加词频 同一文档中同一词出现几次这里cnt等于几
+            //记录包含该词的文档个数 一个词在同一文档中出现多次这里也只会++一次
             documentFrequency[word]++;
         }
     }
@@ -192,21 +203,26 @@ void PageProcessor::build_inverted_index(const std::string&filename)
 
         const auto& localFreq=docTermCount[doc.id];
 
-        // 先算原始权重
+        // 先算原始TF-IDF权重
         std::map<std::string,double> rawWeights;
         double squareSum=0.0;
 
         for(const auto& [word,cnt]:localFreq){
+            //TF=词语在文档中出现的次数/文档总词数  衡量一个词语在该篇文档中出现的频率高低 越高权重越高
             double tf=static_cast<double>(cnt)/totalWords;
+            //IDF=log2(文档总数/包含该词语的文档数+1)
+            // DF衡量一个词语在所有文档中出现的频率高低 越高权重越低
+            // IDF则反过来 越高权重越高 所以相乘后的值越大权重越高
             double idf=std::log2(static_cast<double>(N)/(documentFrequency[word]+1));
             double weight=tf*idf;
             rawWeights[word]=weight;
-            squareSum+=weight*weight;
+            squareSum+=weight*weight;//求平方和
         }
 
         // 归一化
-        double norm=std::sqrt(squareSum);
+        double norm=std::sqrt(squareSum);//做分母
         for(const auto& [word,weight]:rawWeights){
+            //读出前面的每一个关键词的权重 分别除以分母得到归一化的权重
             double normalized=(norm>0)?weight/norm:0.0;
             _invertedIndex[word][doc.id]=normalized;
         }

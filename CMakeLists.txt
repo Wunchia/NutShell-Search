@@ -28,11 +28,23 @@ find_package(Threads REQUIRED)
 # tinyxml2: 用于离线模块解析 XML 语料
 find_package(tinyxml2 REQUIRED)
 
-# nlohmann_json: 用于在线模块 JSON 序列化（暂未启用）
-# find_package(nlohmann_json REQUIRED)
+# nlohmann_json: 用于在线模块 JSON 序列化
+add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
+target_include_directories(nlohmann_json::nlohmann_json
+    INTERFACE /usr/local/include
+)
 
-# muduo: 用于在线模块的 TCP 网络框架（暂未启用）
-# find_package(muduo REQUIRED)  # muduo 库分为 muduo_net 和 muduo_base
+# muduo: 用于在线模块的 TCP 网络框架
+add_library(muduo::muduo_base STATIC IMPORTED)
+set_target_properties(muduo::muduo_base PROPERTIES
+    IMPORTED_LOCATION /usr/local/lib/libmuduo_base.a
+)
+
+add_library(muduo::muduo_net STATIC IMPORTED)
+set_target_properties(muduo::muduo_net PROPERTIES
+    IMPORTED_LOCATION /usr/local/lib/libmuduo_net.a
+)
+target_link_libraries(muduo::muduo_net INTERFACE muduo::muduo_base)
 
 # =========================================================================
 # 模块一：收集公共模块代码 (common)
@@ -56,18 +68,18 @@ target_link_libraries(nutshell_offline
 # =========================================================================
 # 模块三：在线检索服务器 (Online Engine)
 # =========================================================================
-# file(GLOB ONLINE_SOURCES CONFIGURE_DEPENDS "src/online/*.cpp")
+file(GLOB ONLINE_SOURCES CONFIGURE_DEPENDS "src/online/*.cpp")
 
 # 生成在线可执行文件 nutshell_online
-# add_executable(nutshell_online ${ONLINE_SOURCES} ${COMMON_SOURCES})
+add_executable(nutshell_online ${ONLINE_SOURCES} ${COMMON_SOURCES})
 
 # 链接在线程序需要的库：muduo_net, muduo_base, nlohmann_json, pthread
-# target_link_libraries(nutshell_online
-#     muduo::muduo_net
-#     muduo::muduo_base
-#     nlohmann_json::nlohmann_json
-#     Threads::Threads
-# )
+target_link_libraries(nutshell_online
+    muduo::muduo_net
+    muduo::muduo_base
+    nlohmann_json::nlohmann_json
+    Threads::Threads
+)
 
 # =========================================================================
 # (预留) 单元测试模块
