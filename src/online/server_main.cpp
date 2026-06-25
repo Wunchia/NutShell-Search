@@ -1,3 +1,4 @@
+#include "online/KeywordService.h"
 #include "online/TlvCodec.h"
 
 #include <muduo/base/Timestamp.h>
@@ -17,11 +18,27 @@ int main()
     muduo::net::InetAddress addr(8848);
     //TCP服务器
     muduo::net::TcpServer server(&loop,addr,"NutShellSearch");
+
+    //加载关键字推荐的离线数据
+    KeywordService keywordService;
+    keywordService.load("../data/index/dict_en.dat",
+                        "../data/index/index_en.dat",
+                        "../data/index/dict_cn.dat",
+                        "../data/index/index_cn.dat");
+
     //TLV编解码器
-    TlvCodec codec([](const muduo::net::TcpConnectionPtr& conn,
-                      const Message& msg,Timestamp time){
-        std::cout<<"msg type: "<<static_cast<int>(msg.type)
-                 <<" msg value: "<<msg.value<<std::endl;
+    TlvCodec codec([&keywordService](
+                    const muduo::net::TcpConnectionPtr& conn,
+                    const Message& msg,Timestamp time){
+        //根据type分发 1=关键字推荐, 2=网页搜索
+        if(msg.type==1){
+            std::string result=keywordService.query(msg.value);
+            std::cout<<"[keyword] querry: "<<msg.value
+                     <<" -> "<<result<<std::endl;
+        }else{
+            std::cout<<"[PageSearch] query: "<<msg.value
+                     <<" todo ... "<<std::endl;
+        }
     });
     //注册链接回调
     server.setConnectionCallback(
