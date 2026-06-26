@@ -229,7 +229,7 @@ std::string KeywordService::queryEnglish(const std::string& keyword,int topK)
         }
         const auto& [word,freq]=_dictEn[lineNo-1];
 
-        if(word==keyword){continue;}//跳过用户输入本身（原词）
+        // if(word==keyword){continue;}//跳过用户输入本身（原词）
         int dist=editDistance(keyword,word);
         Candidates.push_back({dist,freq,word});
     }
@@ -291,7 +291,7 @@ std::string KeywordService::queryChinese(const std::string& keyword,int topK)
         }
         const auto& [word,freq]=_dictCn[lineNo-1];
 
-        if(word==keyword){continue;}//跳过用户输入本身（原词）
+        // if(word==keyword){continue;}//跳过用户输入本身（原词）
         int dist=editDistance(keyword,word);
         Candidates.push_back({dist,freq,word});
     }

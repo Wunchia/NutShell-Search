@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>nutshell_search</title>
+        <title>Nutshell Search</title>
         <style>
             /* ==========================================
            RESET & CORE VARIABLES
@@ -48,51 +48,30 @@
             }
 
             /* ==========================================
-           BACKGROUND WATERMARK (The Nut)
+           BACKGROUND WATERMARK — 毛玻璃模糊过渡
            ========================================== */
             .watermark-container {
                 position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 600px;
-                height: 600px;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
                 pointer-events: none;
                 z-index: 0;
-                display: flex;
-                justify-content: center;
-                align-items: center;
+                transition:
+                    filter 1.2s cubic-bezier(0.25, 1, 0.25, 1),
+                    opacity 1.2s cubic-bezier(0.25, 1, 0.25, 1);
             }
 
-            /* 左右两侧的果壳，用于实现裂开动画 */
-            .nut-half {
-                position: absolute;
+            .nut-bg {
                 width: 100%;
                 height: 100%;
-                fill: none;
-                stroke: rgba(255, 255, 255, 0.04);
-                stroke-width: 2;
-                transition:
-                    transform 1.2s cubic-bezier(0.19, 1, 0.22, 1),
-                    opacity 1s ease,
-                    filter 1s ease;
+                object-fit: cover;
             }
 
-            /* 果壳纹理阴影，增加质感 */
-            .nut-half {
-                filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
-            }
-
-            /* 裂开动画类 */
-            body.cracking .nut-half.left {
-                transform: translateX(-40vw) rotate(-20deg) scale(1.1);
-                opacity: 0;
-                filter: blur(10px);
-            }
-            body.cracking .nut-half.right {
-                transform: translateX(40vw) rotate(20deg) scale(1.1);
-                opacity: 0;
-                filter: blur(10px);
+            /* 搜索后：背景模糊 + 变暗 */
+            body.searched .watermark-container {
+                filter: blur(6px) brightness(0.7);
             }
 
             /* ==========================================
@@ -105,7 +84,7 @@
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                height: 100vh; /* 初始居中 */
+                height: 100vh;
                 width: 100%;
                 transition: var(--transition-slow);
             }
@@ -305,41 +284,9 @@
             .suggestion-item.active {
                 background: var(--glass-hover);
             }
-            .suggestion-item .freq {
-                font-size: 12px;
-                color: #555;
-            }
-
-            /* === 底部 Footer (居中时显示) === */
-            footer {
-                position: fixed;
-                bottom: 30px;
-                left: 50%;
-                transform: translateX(-50%);
-                display: flex;
-                gap: 30px;
-                font-size: 13px;
-                color: var(--text-muted);
-                opacity: 1;
-                transition: opacity 0.5s;
-                z-index: 10;
-            }
-            body.cracking footer,
-            body.searched footer {
-                opacity: 0;
-                pointer-events: none;
-            }
-            footer a {
-                color: inherit;
-                text-decoration: none;
-                transition: color 0.2s;
-            }
-            footer a:hover {
-                color: var(--text-main);
-            }
 
             /* ==========================================
-           SEARCH RESULTS (New Page Layout)
+           SEARCH RESULTS
            ========================================== */
             .results-area {
                 display: none;
@@ -438,47 +385,14 @@
         </style>
     </head>
     <body>
-        <!-- 中心背景水印 (裂开动画专用的纯手绘分体式SVG) -->
+        <!-- 背景水印 — 搜索后毛玻璃模糊 -->
         <div class="watermark-container">
-            <!-- 左侧果壳 -->
-            <svg
-                class="nut-half left"
-                viewBox="0 0 600 600"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <!-- 外轮廓 -->
-                <path
-                    d="M 300 60 C 120 80, 40 220, 80 400 C 110 540, 260 570, 300 570 C 270 420, 310 250, 300 60 Z"
-                />
-                <!-- 内部深纹理 -->
-                <path
-                    d="M 300 60 C 230 160, 250 320, 160 420 C 130 460, 140 520, 300 570"
-                />
-                <path d="M 230 220 C 170 270, 150 360, 190 460" />
-            </svg>
-
-            <!-- 右侧果壳 (与左侧完美拼合) -->
-            <svg
-                class="nut-half right"
-                viewBox="0 0 600 600"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <!-- 外轮廓 -->
-                <path
-                    d="M 300 60 C 480 80, 560 220, 520 400 C 490 540, 340 570, 300 570 C 330 420, 290 250, 300 60 Z"
-                />
-                <!-- 内部深纹理 -->
-                <path
-                    d="M 300 60 C 370 160, 350 320, 440 420 C 470 460, 460 520, 300 570"
-                />
-                <path d="M 370 220 C 430 270, 450 360, 410 460" />
-            </svg>
+            <img class="nut-bg" src="/background.png" alt="" />
         </div>
 
         <!-- 顶部布局区 (Logo + 搜索框) -->
         <header class="top-section" id="top-section">
             <div class="brand" id="brand" title="Return to Home">
-                <!-- 全新质感Logo: 极简的圆圈与纹理 -->
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <circle cx="12" cy="12" r="10" />
                     <path d="M 8 7 C 14 4, 18 10, 12 17 C 8 22, 6 12, 12 7" />
@@ -538,13 +452,6 @@
             </div>
             <div id="results-list"></div>
         </main>
-
-        <footer>
-            <a href="#">About</a>
-            <a href="#">Privacy</a>
-            <a href="#">Terms</a>
-            <a href="#">Support</a>
-        </footer>
 
         <script>
             const $body = document.body;
@@ -637,7 +544,7 @@
                             ).textContent;
                     }
 
-                    executeCrackAndSearch();
+                    executeSearch();
                 } else if (e.key === "Escape") {
                     $suggestions.classList.remove("open");
                 }
@@ -655,10 +562,10 @@
                 const item = e.target.closest(".suggestion-item");
                 if (!item) return;
                 $searchBox.value = item.querySelector(".word").textContent;
-                executeCrackAndSearch();
+                executeSearch();
             });
 
-            $submitBtn.addEventListener("click", executeCrackAndSearch);
+            $submitBtn.addEventListener("click", executeSearch);
             document.addEventListener("click", (e) => {
                 if (
                     !$searchBox.contains(e.target) &&
@@ -668,25 +575,20 @@
                 }
             });
 
-            // === 3. 核心：裂开动画与布局切换 ===
-            function executeCrackAndSearch() {
+            // === 3. 毛玻璃过渡 + 布局切换 ===
+            function executeSearch() {
                 const q = $searchBox.value.trim();
                 if (q.length === 0) return;
 
                 $suggestions.classList.remove("open");
 
-                // 如果还处于首页状态，执行裂开动画
                 if (!$body.classList.contains("searched")) {
-                    $body.classList.add("cracking");
-
-                    // 延迟等待果壳裂开后，切换到搜索布局
-                    setTimeout(() => {
-                        $body.classList.add("searched");
-                        $body.classList.remove("cracking");
-                        fetchResults(q);
-                    }, 600); // 600ms 与 CSS transition-slow 配合
+                    // 首次搜索：直接切换到搜索结果布局，
+                    // CSS transition 自动让背景模糊过渡
+                    $body.classList.add("searched");
+                    // 延迟发请求，让模糊动画先跑一帧
+                    setTimeout(() => fetchResults(q), 100);
                 } else {
-                    // 已在搜索页则直接发请求
                     fetchResults(q);
                 }
             }
@@ -723,7 +625,8 @@
                         const title = doc.title || "(Untitled Document)";
                         const link = doc.link || "#";
                         const abstract =
-                            doc.abstract || "No abstract available...";
+                            stripHtml(doc.abstract) ||
+                            "No abstract available...";
 
                         return `
                 <div class="result-item" style="animation-delay: ${i * 0.08}s">
@@ -737,7 +640,7 @@
 
             // === 4. 返回首页 ===
             $brand.addEventListener("click", () => {
-                $body.classList.remove("searched", "cracking");
+                $body.classList.remove("searched");
                 $searchBox.value = "";
                 $resultsList.innerHTML = "";
                 $emptyState.style.display = "none";
@@ -749,6 +652,12 @@
                 const div = document.createElement("div");
                 div.textContent = str;
                 return div.innerHTML;
+            }
+            function stripHtml(str) {
+                if (!str) return "";
+                const div = document.createElement("div");
+                div.innerHTML = str;
+                return div.textContent || "";
             }
             function escapeAttr(str) {
                 return str

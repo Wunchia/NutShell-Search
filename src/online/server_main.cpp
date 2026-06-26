@@ -183,6 +183,21 @@ int main()
                 return;
             }
 
+            // 静态资源：背景图片
+            if (basePath == "/background.png") {
+                std::ifstream ifs("../static/background.png", std::ios::binary);
+                if (ifs) {
+                    std::string img((std::istreambuf_iterator<char>(ifs)),
+                        std::istreambuf_iterator<char>());
+                    resp->setStatusCode(muduo::net::HttpResponse::k200Ok);
+                    resp->setContentType("image/png");
+                    resp->setBody(img);
+                } else {
+                    resp->setStatusCode(muduo::net::HttpResponse::k404NotFound);
+                }
+                return;
+            }
+
             // ------------------------------------------------------
             // 兜底：404
             // ------------------------------------------------------
