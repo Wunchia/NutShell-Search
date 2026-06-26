@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>nutshell_search</title>
+        <style>
+            /* ==========================================
+           RESET & CORE VARIABLES
+           ========================================== */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            :root {
+                --bg-dark: #0a0a0c;
+                --bg-center: #242426;
+                --text-main: #e8e8e8;
+                --text-muted: #808084;
+                --glass-bg: rgba(255, 255, 255, 0.03);
+                --glass-border: rgba(255, 255, 255, 0.08);
+                --glass-hover: rgba(255, 255, 255, 0.06);
+                --accent: #a3a3a3;
+                --transition-slow: 0.8s cubic-bezier(0.25, 1, 0.25, 1);
+                --transition-fast: 0.3s ease;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    "Helvetica Neue", Arial, sans-serif;
+                background: radial-gradient(
+                    circle at 50% 40%,
+                    var(--bg-center) 0%,
+                    #121214 50%,
+                    var(--bg-dark) 100%
+                );
+                background-attachment: fixed;
+                color: var(--text-main);
+                min-height: 100vh;
+                overflow-x: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* ==========================================
+           BACKGROUND WATERMARK (The Nut)
+           ========================================== */
+            .watermark-container {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 600px;
+                height: 600px;
+                pointer-events: none;
+                z-index: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+
+            /* 左右两侧的果壳，用于实现裂开动画 */
+            .nut-half {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                fill: none;
+                stroke: rgba(255, 255, 255, 0.04);
+                stroke-width: 2;
+                transition:
+                    transform 1.2s cubic-bezier(0.19, 1, 0.22, 1),
+                    opacity 1s ease,
+                    filter 1s ease;
+            }
+
+            /* 果壳纹理阴影，增加质感 */
+            .nut-half {
+                filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
+            }
+
+            /* 裂开动画类 */
+            body.cracking .nut-half.left {
+                transform: translateX(-40vw) rotate(-20deg) scale(1.1);
+                opacity: 0;
+                filter: blur(10px);
+            }
+            body.cracking .nut-half.right {
+                transform: translateX(40vw) rotate(20deg) scale(1.1);
+                opacity: 0;
+                filter: blur(10px);
+            }
+
+            /* ==========================================
+           MAIN LAYOUT (Top Section & Search)
+           ========================================== */
+            .top-section {
+                position: relative;
+                z-index: 10;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh; /* 初始居中 */
+                width: 100%;
+                transition: var(--transition-slow);
+            }
+
+            /* 切换到搜索结果布局时的 Header 样式 */
+            body.searched .top-section {
+                height: 80px;
+                flex-direction: row;
+                justify-content: flex-start;
+                padding: 0 40px;
+                background: rgba(15, 15, 18, 0.7);
+                backdrop-filter: blur(24px);
+                -webkit-backdrop-filter: blur(24px);
+                border-bottom: 1px solid var(--glass-border);
+                position: sticky;
+                top: 0;
+            }
+
+            /* === Logo 设计 === */
+            .brand {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 16px;
+                margin-bottom: 40px;
+                cursor: pointer;
+                transition: var(--transition-slow);
+            }
+
+            .brand svg {
+                width: 44px;
+                height: 44px;
+                stroke: var(--text-muted);
+                fill: none;
+                stroke-width: 1.2;
+                transition: stroke var(--transition-fast);
+            }
+            .brand:hover svg {
+                stroke: var(--text-main);
+            }
+            .brand h1 {
+                font-size: 26px;
+                font-weight: 600;
+                letter-spacing: 1px;
+                color: var(--text-main);
+                transition: var(--transition-slow);
+            }
+
+            /* 搜索后 Logo 的变化 */
+            body.searched .brand {
+                flex-direction: row;
+                margin-bottom: 0;
+                gap: 12px;
+                margin-right: 40px;
+            }
+            body.searched .brand svg {
+                width: 32px;
+                height: 32px;
+            }
+            body.searched .brand h1 {
+                font-size: 20px;
+            }
+
+            /* === 搜索框设计 === */
+            .search-wrapper {
+                position: relative;
+                width: 100%;
+                max-width: 680px;
+                padding: 0 20px;
+                transition: var(--transition-slow);
+            }
+
+            body.searched .search-wrapper {
+                max-width: 700px;
+                padding: 0;
+            }
+
+            .search-box-container {
+                display: flex;
+                align-items: center;
+                width: 100%;
+                height: 60px;
+                background: var(--glass-bg);
+                border: 1px solid var(--glass-border);
+                border-radius: 30px;
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                box-shadow:
+                    inset 0 1px 2px rgba(255, 255, 255, 0.03),
+                    0 8px 32px rgba(0, 0, 0, 0.2);
+                padding: 0 8px 0 24px;
+                transition: all var(--transition-fast);
+            }
+
+            body.searched .search-box-container {
+                height: 48px;
+                border-radius: 24px;
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+            .search-box-container:focus-within {
+                background: var(--glass-hover);
+                border-color: rgba(255, 255, 255, 0.15);
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+            }
+
+            .icon-btn {
+                background: none;
+                border: none;
+                color: var(--text-muted);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 10px;
+                cursor: pointer;
+                transition: color 0.2s;
+            }
+            .icon-btn:hover {
+                color: var(--text-main);
+            }
+            .icon-btn svg {
+                width: 22px;
+                height: 22px;
+                fill: currentColor;
+            }
+            body.searched .icon-btn svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .search-input {
+                flex: 1;
+                background: transparent;
+                border: none;
+                outline: none;
+                color: var(--text-main);
+                font-size: 17px;
+                padding: 0 16px;
+                font-weight: 300;
+            }
+            .search-input::placeholder {
+                color: #666666;
+            }
+            body.searched .search-input {
+                font-size: 15px;
+            }
+
+            /* === 联想下拉框 === */
+            .suggestions {
+                position: absolute;
+                top: calc(100% + 10px);
+                left: 20px;
+                right: 20px;
+                background: rgba(20, 20, 22, 0.9);
+                border: 1px solid var(--glass-border);
+                border-radius: 16px;
+                max-height: 0;
+                overflow: hidden;
+                opacity: 0;
+                transition: all 0.3s ease;
+                backdrop-filter: blur(20px);
+                z-index: 50;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+            }
+            body.searched .suggestions {
+                left: 0;
+                right: 0;
+            }
+            .suggestions.open {
+                max-height: 320px;
+                opacity: 1;
+                overflow-y: auto;
+            }
+            .suggestions::-webkit-scrollbar {
+                width: 4px;
+            }
+            .suggestions::-webkit-scrollbar-thumb {
+                background: var(--glass-border);
+                border-radius: 2px;
+            }
+
+            .suggestion-item {
+                padding: 14px 24px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                transition: background 0.2s;
+                font-size: 15px;
+                color: var(--text-main);
+                font-weight: 300;
+            }
+            .suggestion-item:not(:last-child) {
+                border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            }
+            .suggestion-item:hover,
+            .suggestion-item.active {
+                background: var(--glass-hover);
+            }
+            .suggestion-item .freq {
+                font-size: 12px;
+                color: #555;
+            }
+
+            /* === 底部 Footer (居中时显示) === */
+            footer {
+                position: fixed;
+                bottom: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                display: flex;
+                gap: 30px;
+                font-size: 13px;
+                color: var(--text-muted);
+                opacity: 1;
+                transition: opacity 0.5s;
+                z-index: 10;
+            }
+            body.cracking footer,
+            body.searched footer {
+                opacity: 0;
+                pointer-events: none;
+            }
+            footer a {
+                color: inherit;
+                text-decoration: none;
+                transition: color 0.2s;
+            }
+            footer a:hover {
+                color: var(--text-main);
+            }
+
+            /* ==========================================
+           SEARCH RESULTS (New Page Layout)
+           ========================================== */
+            .results-area {
+                display: none;
+                width: 100%;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px 20px 80px;
+                flex-direction: column;
+                gap: 0;
+                z-index: 5;
+            }
+            body.searched .results-area {
+                display: flex;
+            }
+
+            .result-item {
+                padding: 24px 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                opacity: 0;
+                transform: translateY(20px);
+                animation: slideUpFade 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)
+                    forwards;
+            }
+            .result-item:last-child {
+                border-bottom: none;
+            }
+
+            .result-title {
+                font-size: 20px;
+                color: #d4d4d4;
+                font-weight: 400;
+                margin-bottom: 6px;
+                display: inline-block;
+                transition: color 0.2s;
+                cursor: pointer;
+            }
+            .result-title:hover {
+                color: #ffffff;
+                text-decoration: underline;
+                text-decoration-color: rgba(255, 255, 255, 0.3);
+            }
+
+            .result-link {
+                font-size: 13px;
+                color: #8ab4f8;
+                margin-bottom: 10px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                opacity: 0.8;
+            }
+
+            .result-snippet {
+                font-size: 14px;
+                line-height: 1.7;
+                color: #9aa0a6;
+                font-weight: 300;
+            }
+
+            @keyframes slideUpFade {
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            /* Loading & Empty States */
+            .spinner {
+                display: none;
+                width: 32px;
+                height: 32px;
+                border: 2px solid var(--glass-border);
+                border-top-color: #ffffff;
+                border-radius: 50%;
+                margin: 80px auto;
+                animation: spin 0.8s linear infinite;
+            }
+            .spinner.show {
+                display: block;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            .empty-state {
+                display: none;
+                text-align: center;
+                margin-top: 100px;
+                color: #666;
+                font-weight: 300;
+                font-size: 16px;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- 中心背景水印 (裂开动画专用的纯手绘分体式SVG) -->
+        <div class="watermark-container">
+            <!-- 左侧果壳 -->
+            <svg
+                class="nut-half left"
+                viewBox="0 0 600 600"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <!-- 外轮廓 -->
+                <path
+                    d="M 300 60 C 120 80, 40 220, 80 400 C 110 540, 260 570, 300 570 C 270 420, 310 250, 300 60 Z"
+                />
+                <!-- 内部深纹理 -->
+                <path
+                    d="M 300 60 C 230 160, 250 320, 160 420 C 130 460, 140 520, 300 570"
+                />
+                <path d="M 230 220 C 170 270, 150 360, 190 460" />
+            </svg>
+
+            <!-- 右侧果壳 (与左侧完美拼合) -->
+            <svg
+                class="nut-half right"
+                viewBox="0 0 600 600"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <!-- 外轮廓 -->
+                <path
+                    d="M 300 60 C 480 80, 560 220, 520 400 C 490 540, 340 570, 300 570 C 330 420, 290 250, 300 60 Z"
+                />
+                <!-- 内部深纹理 -->
+                <path
+                    d="M 300 60 C 370 160, 350 320, 440 420 C 470 460, 460 520, 300 570"
+                />
+                <path d="M 370 220 C 430 270, 450 360, 410 460" />
+            </svg>
+        </div>
+
+        <!-- 顶部布局区 (Logo + 搜索框) -->
+        <header class="top-section" id="top-section">
+            <div class="brand" id="brand" title="Return to Home">
+                <!-- 全新质感Logo: 极简的圆圈与纹理 -->
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M 8 7 C 14 4, 18 10, 12 17 C 8 22, 6 12, 12 7" />
+                    <path d="M 12 12 L 8 18" />
+                </svg>
+                <h1>Nutshell Search</h1>
+            </div>
+
+            <div class="search-wrapper">
+                <div class="search-box-container">
+                    <div class="icon-btn" style="cursor: default">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+                            />
+                        </svg>
+                    </div>
+
+                    <input
+                        class="search-input"
+                        id="search-box"
+                        type="text"
+                        placeholder="Search nutshell..."
+                        autocomplete="off"
+                        autofocus
+                    />
+
+                    <button class="icon-btn" title="Voice Search">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"
+                            />
+                        </svg>
+                    </button>
+                    <button class="icon-btn" id="submit-btn" title="Search">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M5 12h14M12 5l7 7-7 7"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                fill="none"
+                            />
+                        </svg>
+                    </button>
+                </div>
+                <div class="suggestions" id="suggestions"></div>
+            </div>
+        </header>
+
+        <!-- 搜索结果区 -->
+        <main class="results-area" id="results-area">
+            <div class="spinner" id="spinner"></div>
+            <div class="empty-state" id="empty-state">
+                No results found for your query.
+            </div>
+            <div id="results-list"></div>
+        </main>
+
+        <footer>
+            <a href="#">About</a>
+            <a href="#">Privacy</a>
+            <a href="#">Terms</a>
+            <a href="#">Support</a>
+        </footer>
+
+        <script>
+            const $body = document.body;
+            const $searchBox = document.getElementById("search-box");
+            const $suggestions = document.getElementById("suggestions");
+            const $resultsList = document.getElementById("results-list");
+            const $spinner = document.getElementById("spinner");
+            const $emptyState = document.getElementById("empty-state");
+            const $brand = document.getElementById("brand");
+            const $submitBtn = document.getElementById("submit-btn");
+
+            let suggestIdx = -1;
+            let debounceTimer = null;
+            let isComposing = false;
+
+            // === 1. 联想输入处理 ===
+            $searchBox.addEventListener("compositionstart", () => {
+                isComposing = true;
+            });
+            $searchBox.addEventListener("compositionend", () => {
+                isComposing = false;
+                handleInput($searchBox.value);
+            });
+            $searchBox.addEventListener("input", (e) => {
+                if (isComposing) return;
+                handleInput(e.target.value);
+            });
+
+            function handleInput(val) {
+                const q = val.trim();
+                clearTimeout(debounceTimer);
+                suggestIdx = -1;
+                if (q.length === 0) {
+                    $suggestions.classList.remove("open");
+                    return;
+                }
+                debounceTimer = setTimeout(() => fetchSuggestions(q), 250);
+            }
+
+            async function fetchSuggestions(q) {
+                try {
+                    const resp = await fetch(
+                        `/api/keyword?q=${encodeURIComponent(q)}`,
+                    );
+                    const list = await resp.json();
+
+                    if (!Array.isArray(list) || list.length === 0) {
+                        $suggestions.classList.remove("open");
+                        return;
+                    }
+
+                    $suggestions.innerHTML = list
+                        .slice(0, 8)
+                        .map((item, i) => {
+                            const word =
+                                typeof item === "string"
+                                    ? item
+                                    : item.word || item;
+                            return `
+                        <div class="suggestion-item" data-idx="${i}">
+                            <span class="word">${escapeHtml(word)}</span>
+                        </div>`;
+                        })
+                        .join("");
+
+                    $suggestions.classList.add("open");
+                } catch (e) {}
+            }
+
+            // === 2. 交互控制 (键盘 & 点击) ===
+            $searchBox.addEventListener("keydown", (e) => {
+                const items = $suggestions.querySelectorAll(".suggestion-item");
+
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    suggestIdx = Math.min(suggestIdx + 1, items.length - 1);
+                    updateHighlight(items);
+                } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    suggestIdx = Math.max(suggestIdx - 1, 0);
+                    updateHighlight(items);
+                } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (isComposing) return;
+
+                    if (suggestIdx >= 0 && items[suggestIdx]) {
+                        $searchBox.value =
+                            items[suggestIdx].querySelector(
+                                ".word",
+                            ).textContent;
+                    }
+
+                    executeCrackAndSearch();
+                } else if (e.key === "Escape") {
+                    $suggestions.classList.remove("open");
+                }
+            });
+
+            function updateHighlight(items) {
+                items.forEach((el, i) => {
+                    el.classList.toggle("active", i === suggestIdx);
+                    if (i === suggestIdx)
+                        el.scrollIntoView({ block: "nearest" });
+                });
+            }
+
+            $suggestions.addEventListener("click", (e) => {
+                const item = e.target.closest(".suggestion-item");
+                if (!item) return;
+                $searchBox.value = item.querySelector(".word").textContent;
+                executeCrackAndSearch();
+            });
+
+            $submitBtn.addEventListener("click", executeCrackAndSearch);
+            document.addEventListener("click", (e) => {
+                if (
+                    !$searchBox.contains(e.target) &&
+                    !$suggestions.contains(e.target)
+                ) {
+                    $suggestions.classList.remove("open");
+                }
+            });
+
+            // === 3. 核心：裂开动画与布局切换 ===
+            function executeCrackAndSearch() {
+                const q = $searchBox.value.trim();
+                if (q.length === 0) return;
+
+                $suggestions.classList.remove("open");
+
+                // 如果还处于首页状态，执行裂开动画
+                if (!$body.classList.contains("searched")) {
+                    $body.classList.add("cracking");
+
+                    // 延迟等待果壳裂开后，切换到搜索布局
+                    setTimeout(() => {
+                        $body.classList.add("searched");
+                        $body.classList.remove("cracking");
+                        fetchResults(q);
+                    }, 600); // 600ms 与 CSS transition-slow 配合
+                } else {
+                    // 已在搜索页则直接发请求
+                    fetchResults(q);
+                }
+            }
+
+            async function fetchResults(q) {
+                $resultsList.innerHTML = "";
+                $emptyState.style.display = "none";
+                $spinner.classList.add("show");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+
+                try {
+                    const resp = await fetch(
+                        `/api/search?q=${encodeURIComponent(q)}`,
+                    );
+                    const data = await resp.json();
+                    $spinner.classList.remove("show");
+
+                    if (!Array.isArray(data) || data.length === 0) {
+                        $emptyState.textContent = `No results found for "${q}".`;
+                        $emptyState.style.display = "block";
+                        return;
+                    }
+                    renderResults(data);
+                } catch (e) {
+                    $spinner.classList.remove("show");
+                    $emptyState.textContent = "Unable to connect to server.";
+                    $emptyState.style.display = "block";
+                }
+            }
+
+            function renderResults(data) {
+                $resultsList.innerHTML = data
+                    .map((doc, i) => {
+                        const title = doc.title || "(Untitled Document)";
+                        const link = doc.link || "#";
+                        const abstract =
+                            doc.abstract || "No abstract available...";
+
+                        return `
+                <div class="result-item" style="animation-delay: ${i * 0.08}s">
+                    <div class="result-title" onclick="window.open('${escapeAttr(link)}','_blank')">${escapeHtml(title)}</div>
+                    <div class="result-link">${escapeHtml(link)}</div>
+                    <div class="result-snippet">${escapeHtml(abstract)}</div>
+                </div>`;
+                    })
+                    .join("");
+            }
+
+            // === 4. 返回首页 ===
+            $brand.addEventListener("click", () => {
+                $body.classList.remove("searched", "cracking");
+                $searchBox.value = "";
+                $resultsList.innerHTML = "";
+                $emptyState.style.display = "none";
+                setTimeout(() => $searchBox.focus(), 800);
+            });
+
+            // Utils
+            function escapeHtml(str) {
+                const div = document.createElement("div");
+                div.textContent = str;
+                return div.innerHTML;
+            }
+            function escapeAttr(str) {
+                return str
+                    .replace(/"/g, "&quot;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+            }
+        </script>
+    </body>
+</html>

@@ -2,6 +2,7 @@
 #include "common/DirectoryScanner.h"
 #include "common/TextUtils.h"
 #include "common/Utils.h"
+#include "common/JiebaSingleton.h"
 
 #include <fstream>
 #include <iostream>
@@ -10,7 +11,6 @@
 
 //构造函数 加载停用词
 KeywordProcessor::KeywordProcessor()
-:_tokenizer()
 {
     _enStopWords=load_stop_words("../data/stopwords/en_stopwords.txt");
     _cnStopWords=load_stop_words("../data/stopwords/cn_stopwords.txt");
@@ -142,7 +142,7 @@ void KeywordProcessor::create_cn_dict(const std::string& dir,
                              std::istreambuf_iterator<char>());
 
         std::vector<std::string> words;
-        _tokenizer.Cut(content,words); //MIX模式分词
+        JiebaSingleton::getJieba().Cut(content,words); //MIX模式分词
 
         //统计词频
         for(const auto& word: words){

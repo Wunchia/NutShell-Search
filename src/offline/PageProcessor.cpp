@@ -2,6 +2,7 @@
 #include "common/DirectoryScanner.h"
 #include "common/TextUtils.h"
 #include "common/Utils.h"
+#include "common/JiebaSingleton.h"
 
 #include <algorithm>
 #include <ios>
@@ -16,8 +17,7 @@
 
 //========= 构造 =========
 PageProcessor::PageProcessor()
-:_tokenizer()
-,_hasher()
+:_hasher()
 {
     _stopWords=load_stop_words("../data/stopwords/cn_stopwords.txt");
     // 网页搜索也用中文停用词（中文网页语料）
@@ -144,7 +144,7 @@ void PageProcessor::build_pages_and_offsets(const std::string& pages,
             <<" <id>"<<doc.id<<"</id>\n"
             <<" <link>"<<doc.link<<"</link>\n"
             <<" <title>"<<doc.title<<"</title>\n"
-            <<" <content>"<<doc.content<<"</content>\n"
+            <<" <content><![CDATA["<<doc.content<<"]]></content>\n"
             <<"</doc>\n";
 
         std::string page=oss.str();
@@ -174,7 +174,7 @@ void PageProcessor::build_inverted_index(const std::string&filename)
 
     for(const auto& doc:_documents){
         std::vector<std::string> words;//存分词结果 所有词
-        _tokenizer.Cut(doc.content,words);
+        JiebaSingleton::getJieba().Cut(doc.content,words);
 
         std::map<std::string,int> localFreq;//存词频 key唯一
         for(const auto& w:words){

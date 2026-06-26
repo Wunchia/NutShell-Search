@@ -39,6 +39,12 @@ set_target_properties(muduo::muduo_net PROPERTIES
 )
 target_link_libraries(muduo::muduo_net INTERFACE muduo::muduo_base)
 
+add_library(muduo::muduo_http STATIC IMPORTED)
+set_target_properties(muduo::muduo_http PROPERTIES
+    IMPORTED_LOCATION /usr/local/lib/libmuduo_http.a
+)
+target_link_libraries(muduo::muduo_http INTERFACE muduo::muduo_net)
+
 # =========================================================================
 # 模块一：收集公共模块代码 (common)
 # =========================================================================
@@ -79,8 +85,10 @@ add_executable(nutshell_online ${ONLINE_SOURCES})
 # muduo_net 已 INTERFACE 链接 muduo_base，不需重复
 target_link_libraries(nutshell_online
     nutshell_common
+    muduo::muduo_http
     muduo::muduo_net
     nlohmann_json::nlohmann_json
+    tinyxml2::tinyxml2
     Threads::Threads
 )
 

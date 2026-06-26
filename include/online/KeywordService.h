@@ -18,20 +18,20 @@ public:
         const std::string& dictCnPath,
         const std::string& idxCnPath);
 
-    //========查询-占位=========
+    //========查询入口：检测中/英文后分发到对应分支=========
     std::string query(const std::string& keyword,int topK=5);
 
 private:
-    // ----------------------------------------------------------
-    // 编辑距离（Levenshtein）
-    // ----------------------------------------------------------
-    // 两个字符串之间最少需要多少次单字符操作（增/删/改）
-    // 才能从 s1 变成 s2。
-    // 算法：动态规划，滚动数组 O(m*n) 时间，O(n) 空间。
+    // ========== 工具函数 ===========
+    // 计算编辑距离
     static int editDistance(const std::string& s1,const std::string& s2);
 
     //检测输入是否包含汉字
     static bool containsCJK(const std::string& s);
+
+    // =========== 查询分支 =============
+    std::string queryEnglish(const std::string& keyword,int topK);
+    std::string queryChinese(const std::string& keyword,int topK);
 
     // ===========内部数据加载============
     // 通用函数：词典文件每行“word freq” -> vector

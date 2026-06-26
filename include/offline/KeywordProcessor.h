@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cppjieba/Jieba.hpp>
 #include <map>
 #include <set>
 #include <string>
@@ -19,7 +18,6 @@ private:
     void build_en_index(const std::string& dict,const std::string& index);
 
 private:
-    cppjieba::Jieba _tokenizer;
     std::set<std::string> _enStopWords;
     std::set<std::string> _cnStopWords;
 };

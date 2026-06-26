@@ -1,0 +1,1218 @@
+搜索引擎项目
+peanutixx
+2026 年 4 月 28 日
+Contents
+1 第一期：离线部分
+
+1
+
+1.1 关键字推荐 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+1
+
+1.2 网页搜索 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+7
+
+2 第二期：在线部分
+
+13
+
+2.1 服务器框架 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+2.2 关键字推荐 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+2.3 网页搜索 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+3 第三期：缓存设计
+
+15
+
+3.1 缓存中应该存放什么类型的数据？ . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+3.2 选择合适的缓存淘汰算法 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+3.3 如何解决并发访问的问题？. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+
+1 第一期：离线部分
+1.1 关键字推荐
+需求
+根据语料库 1 和停用词 2 生成词典库 3 和索引库 4 。
+英文词典库和索引库：
+
+1
+
+语料库（Corpus）：是指经过科学收集和加工、能够代表某种语言或语言变体的真实文本（或语音）电子数据库。
+停用词：是指在信息检索、文本分析或自然语言处理中，被预先过滤掉（忽略）的词语。这些词通常极其高频，但承载的信息量很低，对理解文本的核心
+主题或情感贡献很小。
+3
+在自然语言处理和语言学中，词典库通常指一个包含词语和它语言属性的结构化信息的集合。常见的语言属性有：词性、词频、释义、情感倾向等等。
+4
+索引库：是信息检索系统（如搜索引擎、数据库）中，为快速查找文档而构建的一种高效数据结构。
+2
+
+1
+
+中文词典库和索引库：
+
+英文：语料库位于 corpus/EN 目录，停用词列表放在 stopwords/en_stopwords.txt 文件中。
+1. 打开目录，读取语料文件 (目录流：opendir(), closedir(), readdir())。
+2. 分词：将数字和标点符号替换成空格，只保留字母；将字母统一转换成小写；按空白字符分割。
+3. 过滤掉停用词。
+4. 统计每一个单词 (Token) 的出现的频率。
+5. 生成词典库和索引库。
+中文：语料库位于 corpus/CN 目录，停用词列表放在 stopwords/cn_stopwords.txt 文件中。
+1. 打开目录，读取语料文件 (目录流：opendir(), closedir(), readdir())。
+2. 使用 cppjieba 分词。
+3. 过滤掉停用词。
+4. 统计每一个单词 (Token) 的出现的频率。
+5. 生成词典库和索引库 (需要使用 utfcpp 库分割出一个一个汉字)。
+
+设计
+有思路的同学，请一定要按照自己的思路去实现，哪怕最终发现是错的。没有思路的同学，可以参照下面的设计：
+
+1
+
+#pragma once
+
+2
+
+#include <vector>
+
+3
+
+#include <string>
+
+DirectoryScanner.h
+
+4
+5
+
+class DirectoryScanner
+
+6
+
+{
+
+7
+
+public:
+
+8
+
+/**
+
+9
+
+* 遍历目录 dir, 获取目录里面的所有文件名
+
+10
+
+*/
+
+11
+
+static std::vector<std::string> scan(const std::string& dir);
+
+12
+13
+
+private:
+DirectoryScanner() = delete;
+
+14
+15
+
+};
+
+2
+
+1
+
+#pragma once
+
+2
+
+#include <cppjieba/Jieba.hpp>
+
+3
+
+#include <string>
+
+4
+
+#include <set>
+
+KeywordProcessor.h
+
+5
+6
+
+class KeyWordProcessor {
+
+7
+
+public:
+KeyWordProcessor();
+
+8
+9
+10
+
+// chDir: 中文语料库
+
+11
+
+// enDir: 英文语料库
+
+12
+
+void process(const std::string& chDir, const std::string& enDir);
+
+13
+14
+
+private:
+
+15
+
+void create_cn_dict(const std::string& dir, const std::string& outfile);
+
+16
+
+void build_cn_index(const std::string& dict, const std::string& index);
+
+17
+
+void create_en_dict(const std::string& dir, const std::string& outfile);
+
+18
+
+void build_en_index(const std::string& dict, const std::string& index);
+
+19
+20
+
+private:
+
+21
+
+cppjieba::Jieba tokenizer_;
+
+22
+
+std::set<std::string> enStopWords_;
+
+23
+
+std::set<std::string> chStopWords_;
+
+24
+
+};
+
+cppjieba 库
+1. 安装
+cppjieba 是一个 header-only 库，我们需要将头文件放到 /usr/local/include 目录下，其中 limonp 文件夹位于
+cppjieba/deps/limonp/include 目录。
+cd cppjieba
+sudo cp -r include/cppjieba/ /usr/local/include/
+sudo cp -r deps/limonp/include/limonp/ /usr/local/include/cppjieba/
+安装之后如下图所示：
+
+3
+
+除了头文件之外，cppjieba 还依赖一些词典文件。词典文件位于 cppjieba/dict 目录，我们需要将它移动到/usr/local/
+目录下，如上图所示。
+2. 使用教程
+cppjieba 有多种分词方式，其中最重要的有三种方式：MP (Maximum Probability 最大概率分词)，HMM (Hidden Markov
+Model 隐马模型分词)，Mix (混合模式：默认方式)。它们的区别如下：
+模式
+
+方法
+
+特性
+
+MP
+
+Cut(sentence, words, false)
+
+基于前缀词典构建词图，使用动态规划找最大概率路径 (精确分词)
+
+HMM
+
+CutHMM(sentence, words)
+
+基于隐马模型，适合新词识别
+
+Mix
+
+Cut(sentence, words)
+
+先使用 MP 分词，再用 HMM 识别 MP 无法识别的新词
+
+下面我们写一个例子，演示一下这三种分词方法的区别：
+
+1
+
+#include <cppjieba/Jieba.hpp>
+
+2
+
+#include <iostream>
+
+cppjieba_cut_words.cc
+
+3
+4
+
+using namespace std;
+
+5
+6
+
+void print_words(const string& title, const vector<string>& words)
+
+7
+
+{
+
+8
+
+cout << "[" << title << "] ";
+
+9
+
+for (const auto& w : words) {
+cout << w << "/";
+
+10
+11
+
+}
+
+12
+
+cout << endl;
+
+13
+
+}
+
+14
+15
+
+int main()
+
+16
+
+{
+
+17
+
+// 创建 Jieba 对象会读取/usr/local/dict 目录下的词典文件，比较耗时
+
+4
+
+18
+
+// 最佳实践: 最好只创建一个 Jieba 对象
+
+19
+
+cppjieba::Jieba tokenizer;
+
+20
+21
+
+string s = "金胖胖是一名杰出的计算机科学家，他今天来到了武汉天源迪科，让我们热烈欢迎金胖胖同学！";
+
+22
+
+vector<string> words;
+
+23
+24
+
+// [MP]
+
+25
+
+tokenizer.Cut(s, words, false); // HMM = false
+
+26
+
+print_words("MP", words);
+
+27
+
+// [HMM]
+
+28
+
+tokenizer.CutHMM(s, words);
+
+29
+
+print_words("HMM", words);
+
+30
+
+// [MIX]
+
+31
+
+// tokenizer.Cut(s, words, true);
+
+32
+
+tokenizer.Cut(s, words);
+print_words("MIX", words);
+
+33
+34
+
+// HMM = true
+
+}
+Terminal
+[MP] 金/胖胖/是/一名/杰出/的/计算机/科学家/，/他/今天/来到/了/武汉/天/源/迪/科/，/让/我们/热烈欢迎/金/胖胖/同学/！/
+[HMM] 金胖/胖是/一名/杰出/的/计算机/科学家/，/他/今天来/到/了/武汉/天源迪科/，/让/我们/热烈/欢迎/金胖/胖同学/！/
+[MIX] 金/胖胖/是/一名/杰出/的/计算机/科学家/，/他/今天/来到/了/武汉/天源迪科/，/让/我们/热烈欢迎/金/胖胖/同学/！/
+
+从上面的结果来看，很明显 MIX 分词方式是最好的。
+
+utfcpp 库
+1. 安装
+utfcpp 也是一个 header-only 库，我们只需要将对应的文件放到/usr/local/include/目录下即可：
+cd utfcpp-4.0.6/
+sudo cp -r source /usr/local/include/utfcpp
+安装之后如下图所示：
+
+2. 使用教程
+先来看第一个示例，它演示了如何拆分 utf8 字符。
+
+1
+
+#include <iostream>
+
+2
+
+#include <utfcpp/utf8.h>
+
+utfcpp_split_characters.cc
+
+3
+4
+
+using namespace std;
+
+5
+
+5
+
+6
+
+int main()
+
+7
+
+{
+string s = "你好，世界！!";
+
+8
+9
+10
+
+const char* curr = s.c_str();
+
+11
+
+const char* end = s.c_str() + s.size();
+
+12
+
+while (curr != end) {
+
+13
+14
+
+auto start = curr;
+
+15
+
+// 将 it 移动到下一个 utf8 字符所在的位置
+
+16
+
+utf8::next(curr, end);
+
+17
+
+// 一个汉字会占用多个字节，因此需要用 string 来表示一个汉字
+
+18
+
+string character = string(start, curr);
+cout << character << endl;
+
+19
+
+}
+
+20
+21
+
+}
+运行结果：
+Terminal
+peanut@wd:Examples$ ./a.out
+你
+好
+，
+世
+界
+！
+!
+
+我们再来看另一个例子，它演示了如何获取字符的 Unicode 码点 (Codepoint)5 。
+
+1
+
+#include <iostream>
+
+2
+
+#include <utfcpp/utf8.h>
+
+utfcpp_codepoint.cc
+
+3
+4
+
+using namespace std;
+
+5
+
+int main()
+
+6
+
+{
+
+7
+
+string s = "你好，世界！!";
+
+8
+
+// 获取 utf8 的起始迭代器和末尾迭代器
+
+9
+
+auto it = utf8::iterator<string::const_iterator>(s.begin(), s.begin(), s.end());
+
+10
+
+auto end = utf8::iterator<string::const_iterator>(s.end(), s.begin(), s.end());
+
+11
+
+for (; it != end; ++it) {
+
+12
+
+char32_t codepoint = *it; // 获取码点
+
+13
+
+cout << "U+" << hex << codepoint << endl; // 以十六进制格式输出
+
+14
+
+}
+
+15
+16
+
+}
+运行结果：
+
+5
+
+码点就是字符集（如 Unicode）给每个字符分配的唯一数字 ID。它是逻辑概念，不是具体的存储方式。
+
+6
+
+Terminal
+peanut@wd:Examples$ ./a.out
+U+4f60
+U+597d
+U+ff0c
+U+4e16
+U+754c
+U+ff01
+U+21
+
+如果我们拿到一个字符的 Unicode 码点，我们就能做很多事情，比如：比较字符的大小（比较 Unicode 码点的大小）
+，判
+断字符的类别（是不是中文汉字）等等。
+
+1.2 网页搜索
+需求
+我们要根据给定的语料 (在公司中，往往是爬取下来的网页，或者是公司内部的文档)，生成网页库、网页偏移库和倒排索
+引库。
+网页库的格式如下所示：包含 <doc>, <id>, <link>, <title>, <content> 等标签。
+
+网页偏移库是用来快速定位文档的，它个格式为: <文档 id>，<偏移量>，<文档大小>。
+
+倒排索引库是搜索引擎非常核心的一个数据结构，它的格式如下：<关键字> <文档 id> <关键字在文档中的权重> [ <文档
+id> <关键字在文档中的权重> ]…
+
+7
+
+流程
+
+1. 使用 tinyxml2 提取语料库中的文档:
+• 我们要为 xml 文件中每一个 <item> 标签生成一个对应的 Document 对象。
+• 如果<item>中有<content>标签，
+将<content>标签的内容作为 Document 的 content；如果<item>中没有<content>
+标签，那么将<description>标签的内容作为 Document 的 content；如果<item>中也没有<description>标签，
+那么忽略该<item>。
+2. 使用 simhash 库对文档去重。
+• 计算每篇文档的 simhash 值，根据汉明距离对文档去重（我们认为汉明距离在 3 以内的文档，是十分相似的）
+。
+3. 根据去重后的文档，生成网页库和网页偏移库。
+4. 使用 cppjieba 提取去重后文档中的关键字。
+5. 使用 TF-IDF 算法计算关键字在文档中的权重，并归一化。
+6. 生成倒排索引库。
+
+8
+
+设计
+有思路的同学，请一定要按照自己的思路去实现，哪怕最终发现是错的。没有思路的同学，可以参照下面的设计：
+
+1
+
+#pragma once
+
+2
+
+#include <vector>
+
+3
+
+#include <string>
+
+DirectoryScanner.h
+
+4
+5
+
+class DirectoryScanner
+
+6
+
+{
+
+7
+
+public:
+
+8
+
+/**
+
+9
+
+* 遍历目录 dir, 获取目录里面的所有文件名
+
+10
+
+*/
+
+11
+
+static std::vector<std::string> scan(const std::string& dir);
+
+12
+13
+
+private:
+DirectoryScanner() = delete;
+
+14
+15
+
+};
+
+1
+
+#pragma once
+
+2
+
+#include <string>
+
+3
+
+#include <vector>
+
+4
+
+#include <set>
+
+PageProcessor.h
+
+5
+6
+
+#include "cppjieba/Jieba.hpp"
+
+7
+
+#include "simhash/Simhasher.hpp"
+
+8
+9
+
+class PageProcessor
+
+10
+
+{
+
+11
+
+public:
+
+12
+
+PageProcessor();
+
+13
+
+void process(const std::string& dir);
+
+14
+15
+
+private:
+
+16
+
+/// 解析 dir 目录下的 xml 文件，提取文档，放入 documents_中
+
+17
+
+void extract_documents(const std::string& dir);
+
+18
+
+/// 依据 SimHash 算法对 documents_去重
+
+19
+
+void deduplicate_documents();
+
+20
+
+/// 构建网页库和网页偏移库
+
+21
+
+void build_pages_and_offsets(const std::string& pages, const std::string& offsets);
+
+22
+
+/// 构建倒排索引库
+
+23
+
+void build_inverted_index(const std::string& filename);
+
+24
+25
+
+private:
+struct Document {
+
+26
+
+int id;
+
+27
+
+std::string link;
+
+28
+
+std::string title;
+
+29
+
+std::string content;
+
+30
+
+};
+
+9
+
+31
+32
+
+private:
+
+33
+
+cppjieba::Jieba tokenizer_;
+
+34
+
+simhash::Simhasher hasher_;
+
+35
+
+std::set<std::string> stopWords_;
+
+36
+
+std::vector<Document> documents_;
+
+37
+
+std::map<std::string, std::map<int, double>> invertedIndex_;
+
+38
+
+// 使用 set, 而非 vector, 是为了方便查找
+
+};
+
+SimHash 算法
+SimHash 是一种局部敏感哈希（Locality-Sensitive Hashing, LSH）算法，由 Google 在 2007 年提出，主要用于海量文
+本的近似去重和相似度检测。它的核心特点是：相似的文本生成相似的哈希值（海明距离小），不相似的文本生成的哈希
+值差异大。
+原理
+下面这张是 SimHash 经典的原理图：
+
+它算法的流程如下：
+1. 文本预处理与分词：对文档内容进行分词，并去除停用词。
+2. 计算每个词的传统哈希值：使用普通哈希函数（如 MD5、SHA-1、FNV-1a 等）给每个词生成哈希值，但不直接使
+用这个哈希值作为结果。我们安装的 simhash 库，它使用的是 Jenkins 哈希算法。
+3. 计算每个词语的权重。
+4. 加权累加：按列相加。如果哈希码该列的值为 1，则加上权重；值为 0，则减去权重。
+5. 二值化生成最终 SimHash 指纹：对累加结果 V 二值化处理，如果 V [i] > 0，则最终指纹的第 i 位为 1；反之，最终
+指纹的第 i 位为 0。
+安装
+simhash 库和 cppjieba 库是同一个作者写的，我们只需要将对应的头文件拷贝到/usr/local/include 目录下即可。
+cd simhash-1.3.3/include/
+sudo cp -r simhash /usr/local/include/
+安装成功之后，/usr/local/include 目录下会多一个 simhash 的文件夹：
+
+10
+
+示例程序
+
+1
+
+#include <bitset>
+
+2
+
+#include <ios>
+
+3
+
+#include <iostream>
+
+4
+
+#include <simhash/Simhasher.hpp>
+
+5
+
+#include <string>
+
+simhash_demo.cc
+
+6
+7
+
+using namespace std;
+
+8
+
+using namespace simhash;
+
+9
+10
+
+// Simhasher 依赖 cppjieba，创建对象时，会读取词典文件，比较耗时
+
+11
+
+// 最佳实践：最好只创建一个 Simhasher 对象
+
+12
+
+Simhasher hasher;
+
+13
+14
+
+int hamming_distance(uint64_t x, uint64_t y)
+
+15
+
+{
+
+16
+
+int distance = 0;
+
+17
+
+uint64_t z = x ^ y;
+
+18
+
+while (z) {
+
+19
+
+z &= (z - 1);
+
+20
+
+distance++;
+
+21
+
+}
+
+22
+
+return distance;
+
+23
+
+}
+
+24
+25
+
+void print_similarity(const string& text1, const string& text2)
+
+26
+
+{
+
+27
+
+uint64_t h1, h2;
+
+28
+
+int topN = 5;
+
+29
+
+hasher.make(text1, topN, h1);
+
+30
+
+hasher.make(text2, topN, h2);
+
+31
+
+cout << bitset<64>(h1) << endl;
+
+32
+
+cout << bitset<64>(h2) << endl;
+
+33
+34
+
+cout << "海明距离：" << hamming_distance(h1, h2) << endl;
+
+35
+
+// 默认情况下：海明距离小于等于 3，即为相等
+
+36
+
+cout << "是否相等：" << boolalpha << Simhasher::isEqual(h1, h2) << endl;
+
+37
+
+// 我们也可以像下面一样指定海明距离小于等于几，才相等
+// cout << "是否相等：" << boolalpha << Simhasher::isEqual(h1, h2, 6) << endl;
+
+38
+39
+
+}
+
+40
+41
+
+int main()
+
+42
+
+{
+
+43
+
+// ============================================================
+
+44
+
+// 高度相似文档
+
+11
+
+45
+
+// ============================================================
+
+46
+
+string doc1 = "机器学习是人工智能的一个分支领域";
+
+47
+
+string doc2 = "机器学习是人工智能领域的重要分支";
+
+48
+
+print_similarity(doc1, doc2);
+
+49
+50
+
+// ============================================================
+
+51
+
+// 不相似文档
+
+52
+
+// ============================================================
+
+53
+
+// 完全不同的主题
+
+54
+
+string doc4 = "机器学习是人工智能的一个分支领域";
+
+55
+
+string doc5 = "今天天气很好适合出门散步运动健康";
+
+56
+
+print_similarity(doc4, doc5);
+
+57
+
+return 0;
+
+58
+59
+
+}
+运行结果，如下所示：
+Terminal
+1110111110011000100100011010100000011100011011100011110010101000
+1110111110011000100100011010100000011100011011100011110010101000
+海明距离：0
+是否相等：true
+1110111110011000100100011010100000011100011011100011110010101000
+0000111111011111101001010001001111111010011000101011101101000100
+海明距离：32
+是否相等：false
+
+不同大小的文本应该使用不同的 topN，一般来说：
+文本长度（字节） 建议 topN
+<= 600
+
+5
+
+~1200
+
+10
+
+~7800
+
+65
+
+>=24000
+
+200
+
+官方推荐使用如下规则获取 topN 的值：max(5, min(200, text.size()/120))。
+TF-IDF 算法
+TF-IDF（Term Frequency - Inverse Document Frequency，词频-逆文档频率）是一种用于信息检索与文本挖掘的常用加
+权技术。它的核心思想是：一个词在当前文档中出现的次数越多（TF 高），同时在所有文档中出现的次数越少（IDF 高）
+，
+那么这个词对当前文档就越重要。
+该算法会涉及到如下几个概念：
+• TF(Term Frequency): 词语在文档中出现的频率。
+TF =
+
+词语在文档中出现的次数
+文档的总词数
+
+• DF(Document Frequency): 包含该词语的文档个数。
+
+12
+
+• IDF(Inverse Document Frequency)：逆文档频率，其计算公式为
+IDF = log2 (
+
+文档总数 N
+)
+DF + 1
+
+理解这些概念之后，我们就可以计算关键字的 TF-IDF 权重 w 了：w = TF ∗ IDF。可以看出，关键字的权重与它在文档中
+出现的次数成正比，和包含该关键字的文档个数成反比。
+一篇文档很可能会包含很多个关键字，首先我们要计算每个关键字的 TF-IDF 权重：w1 , w2 , . . . , wn ，然后归一化:
+wi
+wi0 = p
+2
+2
+w1 + w2 + · · · + wn2
+倒排索引中保存是关键字归一化后的权重，即 wi0 。
+
+2 第二期：在线部分
+2.1 服务器框架
+服务器端框架的选择有两种：a) wfrest; b) muduo。这里建议大家使用 muduo，原因有两点：
+• 相较于 wfrest（应用层）
+，muduo 更为底层（TCP 层），给予开发者更多控制权，便于定制优化。
+• 目前 Linux 平台几乎所有的高性能网络框架都是基于 Reactor 模型，学习和使用 Reactor 模型，可以帮助大家更好
+地上手工作。
+• 有助于理解 TCP 网络编程的理论知识，达到更好的锻炼效果。
+由于 muduo 是基于 TCP 的，我们需要自定义协议来解决 TCP 的粘包问题，通常情况下，我们会采用 TLV 协议：
+struct Message {
+uint8_t type;
+
+// 消息的类型
+
+uint32_t length;
+
+// value 的长度
+
+std::string value;
+
+//消息的内容
+
+1: 关键字推荐 2: 网页搜索
+
+};
+
+2.2 关键字推荐
+
+服务器收到客户端发来的关键字后，会根据索引库和词典库，选取与关键字最相近的一些候选词，返回给客户端。
+候选词的选取
+1. 将关键字拆分成一个一个字符。
+2. 通过索引库获取每一个字符对应的词语集合，合并所有的词语集合，得到候选词集合。
+
+13
+
+3. 通过编辑距离算法，计算候选词集合中的候选词与关键字的相似度。
+4. 选择最相近的候选词：
+• 优先比较编辑距离。
+• 在编辑距离相同的情况下，比较候选词的词频；优先选择词频高的候选词。
+• 在词频相同的情况下，按字典序比较候选词的大小；优先选择字典序小的候选词。
+5. 选择最相近的 k(比如：5) 个候选词，以 JSON 格式返回给客户端，（提示：可以使用优先队列 priority_queue）
+。
+
+2.3 网页搜索
+
+服务器接收客户端输入的查询内容，会根据倒排索引库、网页库和网页偏移库选取与查询内容最相关的一些网页，并根
+据网页内容（content 标签中的内容）生成摘要 (abstract)，返回给客户端。
+网页的选取
+1. 核心处理：将用户输入的查询内容视为一篇新的文档 X。
+• 使用 cppjieba 对文档 X 进行分词，过滤停用词，获取关键字集合。
+• 使用 TF-IDF 算法计算出每个关键字的权重，将其组成一个向量 X = (x1 , x2 , . . . , xn )，我们将该向量称为基准
+向量。
+2. 过倒排索引库，查询包含所有关键字的网页。当网页库很大的情况下，我们几乎总是可以找到这样的网页的；如果
+没有包含所有关键字的网页，我们就返回空数组。
+3. 如果找到了包含所有关键字的网页，我们则采用余弦相似度算法对网页进行排序。
+• 既然网页包含所有的关键字，那么我们就可以通过倒排索引库获取每一个关键字的权重，将其组成向量 Y =
+(y1 , y2 , . . . , yn )。
+• 计算基准向量 X 与 Y 的余弦值，该余弦值就代表了 X 与 Y 的相似度。
+• 根据余弦值对网页进行排序，余弦值越大越相似，排序越靠前。
+
+14
+
+cosθ =
+
+X ·Y
+|X||Y |
+
+X · Y = x1 y1 + x2 y2 + · · · + xn yn
+4. 找到网页之后，我们需要提取每篇网页中的 id, title, link 信息，并根据网页内容生成摘要 (abstract)。将这些信
+息封装到 JSON 中，返回给客户端。生成摘要有两种方式：
+• 静态摘要：将文档内容的前 n 个字符作为摘要，比如前 50 个字符。
+• 动态摘要：将查询关键字附近的文字组成摘要。
+
+3 第三期：缓存设计
+我们可以使用缓存来加快查询结果。
+在设计缓存之前，我们先回答下面几个问题：
+
+3.1 缓存中应该存放什么类型的数据？
+缓存的目的是加快程序运行的速度。一般来说，我们会把下面这些类型的数据放入缓存中：
+• 读多写少的数据。这是缓存的黄金法则，数据被频繁读取，但修改频率很低。
+• 计算耗时的数据（可以是计算的中间结果，也可以是最终结果）。
+• 热点数据：在某段时间内被频繁访问的数据。
+• 可以容忍短暂时间不一致的数据（最终一致性），比如“热门文章推荐”、
+“排行榜（非实时）”、用户评论数（允许几
+秒误差）
+。
+具体到我们的项目中，我们可以缓存下面的数据（键值对）：
+• 关键字 → 推荐结果，比如："花生" → ["花生", "花生米", "花生壳", ...]
+• 对于网页搜索功能，我们可以缓存热门文档的信息，避免频繁读取网页库。如：
+文档 id → {"id": 250, "title": ..., "link": ..., "abstract": ...}。
+
+3.2 选择合适的缓存淘汰算法
+• LRU：淘汰最久未被访问的数据。
+• LFU：淘汰访问次数最少的数据。
+
+15
+
+• 其它的缓存淘汰算法，比如 LRU 的变种，LFU 的变种，或自适应替换缓存 (ARC) 等。
+
+3.3 如何解决并发访问的问题？
+假设有 n 个工作线程，它们都要访问缓存。如果缓存只有一个，那么所有线程都要争夺同一把锁，这样就会造成严重的排
+队等待问题。如果我们能够设计一个方案，使得：缓存结构在绝大多数情况下仅被一个线程访问，那么锁竞争导致的排队
+等待问题将迎刃而解。
+
+下面是一个简单粗糙的设计 (仅供参考)：
+template<typename Key, typename Value>
+class HashxxxCaches
+{
+public:
+void put(const Key& key, const Value& value);
+bool get(const Key& key, Value& value);
+private:
+int capacity_;
+int slices_;
+
+// 总容量
+// 分片数量：cache 的数目
+
+std::vector<std::unique_ptr<xxxCache<Key, Value>>> _caches;
+std::hash<Key>
+
+hash_func_;
+
+// 哈希函数
+
+}
+
+16
+
+

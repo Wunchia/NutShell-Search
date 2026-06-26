@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cppjieba/Jieba.hpp>
 #include <simhash/Simhasher.hpp>
 
 #include <map>
@@ -30,7 +29,6 @@ private:
     };
 
 private:
-    cppjieba::Jieba _tokenizer;
     simhash::Simhasher _hasher;
     std::set<std::string> _stopWords;
     std::vector<Document> _documents;
