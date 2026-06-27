@@ -346,6 +346,13 @@
                 color: #9aa0a6;
                 font-weight: 300;
             }
+            .result-snippet mark {
+                background: transparent; /* 彻底去掉背景色块 */
+                color: #ffffff; /* 文字直接提亮至纯白 */
+                border-bottom: 2px solid #64b5f6; /* 用一条高亮的链接蓝/淡蓝作下划线 */
+                padding: 0 1px;
+                font-weight: bold;
+            }
 
             @keyframes slideUpFade {
                 to {
@@ -464,6 +471,7 @@
             const $submitBtn = document.getElementById("submit-btn");
 
             let suggestIdx = -1;
+            let currentQuery = "";
             let debounceTimer = null;
             let isComposing = false;
 
@@ -579,7 +587,7 @@
             function executeSearch() {
                 const q = $searchBox.value.trim();
                 if (q.length === 0) return;
-
+                currentQuery = q;
                 $suggestions.classList.remove("open");
 
                 if (!$body.classList.contains("searched")) {
@@ -620,6 +628,14 @@
             }
 
             function renderResults(data) {
+                const tokens = [
+                    ...new Set([
+                        currentQuery,
+                        ...currentQuery
+                            .split(/\s+/)
+                            .filter((t) => t.length > 0),
+                    ]),
+                ];
                 $resultsList.innerHTML = data
                     .map((doc, i) => {
                         const title = doc.title || "(Untitled Document)";
@@ -632,7 +648,7 @@
                 <div class="result-item" style="animation-delay: ${i * 0.08}s">
                     <div class="result-title" onclick="window.open('${escapeAttr(link)}','_blank')">${escapeHtml(title)}</div>
                     <div class="result-link">${escapeHtml(link)}</div>
-                    <div class="result-snippet">${escapeHtml(abstract)}</div>
+                    <div class="result-snippet">${highlightKeywords(abstract, tokens)}</div>
                 </div>`;
                     })
                     .join("");
@@ -664,6 +680,19 @@
                     .replace(/"/g, "&quot;")
                     .replace(/</g, "&lt;")
                     .replace(/>/g, "&gt;");
+            }
+            function highlightKeywords(text, keywords) {
+                if (!text || !keywords.length) return escapeHtml(text);
+                // 先转义，再在转义后的安全 HTML 上做高亮包裹
+                let html = escapeHtml(text);
+                for (const kw of keywords) {
+                    if (!kw || kw.length < 2) continue; // 跳过单字，避免满屏高亮
+                    // 转义正则特殊字符
+                    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    const regex = new RegExp(escaped, "gi");
+                    html = html.replace(regex, "<mark>$&</mark>");
+                }
+                return html;
             }
         </script>
     </body>

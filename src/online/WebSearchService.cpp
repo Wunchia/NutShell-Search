@@ -224,7 +224,8 @@ std::string WebSearchService::query(const std::string& queryText,int topK)
         item["id"]=page.id;
         item["title"]=page.title;
         item["link"]=page.link;
-        item["abstract"]=generateAbstract(page.content); //前100字摘要
+        //动态摘要
+        item["abstract"]=generateAbstract(page.content,queryWeights);
         item["score"]=scoredDocs[i].score; //调试用 余弦相似度
 
         result.push_back(item);
@@ -295,25 +296,89 @@ WebSearchService::PageInfo WebSearchService::readPage(int docId) const
 // ==============================================
 //          generateAbstract:静态摘要生成
 // ==============================================
-std::string WebSearchService::generateAbstract(const std::string& content,size_t maxLen)
+// 在正文中定位查询关键词，取关键词前后各 contextLen/3 个字的
+// 上下文形成片段，合并重叠片段。无命中时回退静态摘要。
+std::string WebSearchService::generateAbstract(
+    const std::string& content,
+    const std::map<std::string,double>& queryWords,
+    size_t contextLen)
 {
     if(content.empty()){return "";}
 
-    const char* curr=content.c_str();
-    const char* end=content.c_str()+content.size();
+    // 把整篇文档拆成 UTF-8 字符数组，同时记录每个字符的字节偏移
+    auto chars=TextUtils::split_utf8_characters(content);
+    size_t totalChars=chars.size();
 
-    size_t charCount=0;
-    while(curr<end&&charCount<maxLen){
-        utf8::unchecked::next(curr);
-        charCount++;
+    // 收集每个命中关键词的【字符索引区间】
+    struct Range{size_t start;size_t end;};
+    std::vector<Range> ranges;
+    for(const auto& [keyword,_]:queryWords){
+        if(keyword.empty()){continue;}
+
+        //string::find 按字节搜索
+        size_t bytePos=0;
+        while((bytePos=content.find(keyword,bytePos))!=std::string::npos){
+            // 字节偏移 -> 字符索引（线性扫描 chars 累加 byte 长度）
+            size_t charIdx=0;
+            size_t accumulated=0;
+            for(;charIdx<chars.size();++charIdx){
+                if(accumulated==bytePos){break;}
+                accumulated+=chars[charIdx].size();
+            }
+            if(charIdx>=chars.size()){break;}
+
+            size_t kwCharLen=TextUtils::split_utf8_characters(keyword).size();
+            size_t before=contextLen/3;
+            size_t after=contextLen-before;
+
+            size_t cstart=(charIdx>before)?charIdx-before:0;
+            size_t cend=std::min(charIdx+kwCharLen+after,totalChars);
+            ranges.push_back({cstart,cend});
+
+            bytePos++;//跳过当前匹配，继续搜索
+        }
+
+        if(ranges.size()>20){break;} //如果有太多命中，取前20个即可
+    }
+    // 合并重叠或相近的区间（间隔<=20字视为连续）
+    if(!ranges.empty()){
+        std::sort(ranges.begin(),ranges.end(),
+            [](const Range& a,const Range&b){return a.start<b.start;});
+
+        std::vector<Range> merged;
+        merged.push_back(ranges[0]);
+        for(size_t i=1;i<ranges.size();++i){
+            Range& last=merged.back();
+            if(ranges[i].start<=last.end+20){
+                last.end=std::max(last.end,ranges[i].end);
+            }else{
+                merged.push_back(ranges[i]);
+            }
+        }
+        // 只保留前 5 个片段
+        if(merged.size()>5){merged.resize(5);}
+
+        // 拼接输出
+        std::string result;
+        for(size_t m=0;m<merged.size();++m){
+            if(m>0)result+=" ... ";
+            for(size_t i=merged[m].start;
+                i<merged[m].end&&i<totalChars;++i){
+                    result+=chars[i];
+                }
+        }
+        if(!result.empty()){return result;}
     }
 
-    std::string abstract(content.c_str(),curr-content.c_str());
+    // 兜底：没任何命中的情况下退回静态摘要
+    if(totalChars<=contextLen){return content;}
 
-    //摘要因字数限制被截断时，在末尾加上省略号提示
-    if(static_cast<size_t>(curr-content.c_str())<content.size()){
-        abstract+=" ... ";
+    std::string fallback;
+    size_t count=0;
+    for(const auto& ch:chars){
+        if(count>=contextLen){break;}
+        fallback+=ch;
+        ++count;
     }
-
-    return abstract;
+    return fallback+ " ... ";
 }

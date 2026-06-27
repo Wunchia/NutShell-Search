@@ -58,5 +58,7 @@ private:
     PageInfo readPage(int docId) const;
 
     // 生成静态摘要： 取content前maxLen个字符（按UTF-8字符计算）
-    static std::string generateAbstract(const std::string& content,size_t maxLen=100);
+    static std::string generateAbstract(const std::string& content,
+        const std::map<std::string,double>& queryWords,
+        size_t maxLen=100);
 };
