@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "common/Trie.h"
 
 
 class KeywordService
@@ -34,11 +35,11 @@ private:
     std::string queryChinese(const std::string& keyword,int topK);
 
     // ===========内部数据加载============
-    // 通用函数：词典文件每行“word freq” -> vector
+    // 通用函数：词典文件每行"word freq" -> vector
     static std::vector<std::pair<std::string,int>>
     loadDict(const std::string& path);
 
-    // 通用函数：索引文件每行“key lineNo1 lineNo2 ...” -> map
+    // 通用函数：索引文件每行"key lineNo1 lineNo2 ..." -> map
     static std::map<std::string,std::set<int>>
     loadIndex(const std::string& path);
 
@@ -47,7 +48,7 @@ private:
     std::vector<std::pair<std::string,int>> _dictEn;
     std::vector<std::pair<std::string,int>> _dictCn;
 
-    // 索引：key -> 行号集合
-    std::map<std::string,std::set<int>> _idxEn;
+    // 索引：英文用 Trie，中文用 map
+    Trie _idxEn;
     std::map<std::string,std::set<int>> _idxCn;
 };

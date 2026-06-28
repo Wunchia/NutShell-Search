@@ -57,6 +57,20 @@ KeywordService::loadIndex(const std::string& path){
     return index;
 }
 
+//loadEnIndex — 专门加载英文 Trie 索引（二进制反序列化）
+static Trie loadEnIndex(const std::string& path)
+{
+    std::ifstream ifs(path, std::ios::binary);
+    if (!ifs) {
+        LOG_ERROR << "Cannot open: " << path;
+        return Trie{};
+    }
+    Trie trie;
+    trie.deserialize(ifs);
+    LOG_INFO << "Loaded index " << path << ": Trie deserialized";
+    return trie;
+}
+
 //load
 void KeywordService::load(const std::string& dictEnPath,
                           const std::string& idxEnPath,
@@ -65,7 +79,8 @@ void KeywordService::load(const std::string& dictEnPath,
 {
     _dictEn=loadDict(dictEnPath);
     _dictCn=loadDict(dictCnPath);
-    _idxEn=loadIndex(idxEnPath);
+    //_idxEn=loadIndex(idxEnPath);  // 旧文本格式加载，已废弃
+    _idxEn=loadEnIndex(idxEnPath);  // 新 Trie 二进制反序列化
     _idxCn=loadIndex(idxCnPath);
 }
 
@@ -182,31 +197,8 @@ std::string KeywordService::query(const std::string& keyword,int topK)
 //=====================queryEnglish=====================
 std::string KeywordService::queryEnglish(const std::string& keyword,int topK)
 {
-    //① 前缀匹配：
-    //    英文索引 index_en.dat 的 key 是「前缀」（去冗后仅保留分叉点），
-    //    如 "a" "ap" "app" "appl"。用户输入 "app"，不会直接命中 "app" 本身，
-    //    而是取最长匹配前缀 → 拿到其行号集合。
-    //
-    //    逐级回退策略：
-    //      先试 keyword 全串 → 不命中则 keyword[0..n-1] → keyword[0..n-2]
-    //      → ... 直到找到第一个存在的 key，或长度归 0
-    //
-    //    为什么不做二分查找 / lower_bound？
-    //      → lower_bound 只能找到「第一个 ≥ keyword」的 key，
-    //        但前缀索引去冗后，"apple" 的候选集可能挂在 "app" 下，
-    //        而非 "apple" 本身。逐级回退更直观且 O(len(keyword))。
-    std::set<int> candidateLines;
-    {
-        std::string prefix=keyword;
-        while(!prefix.empty()){
-            auto it=_idxEn.find(prefix);
-            if(it!=_idxEn.end()){
-                candidateLines=it->second;
-                break;
-            }
-            prefix.pop_back();
-        }
-    }
+    //① 前缀匹配: Trie::search() 已内置逐级回退逻辑
+    std::set<int> candidateLines = _idxEn.search(keyword);
     if(candidateLines.empty()){
         return "[]";//如果没有命中任何前缀，则返回空数组
     }

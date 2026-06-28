@@ -3,6 +3,7 @@
 #include "common/TextUtils.h"
 #include "common/Utils.h"
 #include "common/JiebaSingleton.h"
+#include "common/Trie.h"
 
 #include <fstream>
 #include <iostream>
@@ -110,20 +111,22 @@ void KeywordProcessor::build_en_index(const std::string& dict,
         //如果行号集相同 -> 说明这个没有分叉，保留这个前缀是冗余的
     }
 
-    // 2.写入索引库：“字符 行号1 行号2 行号3 ...”
-    std::ofstream ofs(index);
-    // for(const auto& [ch,lines]:charIndex){
-    //     ofs<<ch;
-    for(const auto&[prefix,lines]:prefixIndex){
-        ofs<<prefix;
-        for(int line:lines){
-            ofs<<" "<<line;
-        }
-        ofs<<"\n";
-    }
+    // ===== 旧文本格式写入（已废弃，改用下面的 Trie 二进制序列化）=====
+    // std::ofstream ofs(index);
+    // for(const auto&[prefix,lines]:prefixIndex){
+    //     ofs<<prefix;
+    //     for(int line:lines) ofs<<" "<<line;
+    //     ofs<<"\n";
+    // }
 
-    // std::cout<<"[Keyword] English index keys: "<<charIndex.size()<<std::endl;
-    std::cout<<"[Keyword] English index keys: "<<prefixIndex.size()<<std::endl;
+    // ② 将去冗后的前缀索引构建成 Trie，二进制序列化写入
+    Trie trie;
+    for (const auto& [pref, lines] : prefixIndex) {
+        trie.insertNode(pref, lines);
+    }
+    std::ofstream ofs(index, std::ios::binary);
+    trie.serialize(ofs);
+    std::cout << "[Keyword] English index keys: " << prefixIndex.size() << std::endl;
 }
 
 
