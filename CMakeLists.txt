@@ -45,6 +45,12 @@ set_target_properties(muduo::muduo_http PROPERTIES
 )
 target_link_libraries(muduo::muduo_http INTERFACE muduo::muduo_net)
 
+add_library(hiredis::hiredis STATIC IMPORTED)
+set_target_properties(hiredis::hiredis PROPERTIES
+    IMPORTED_LOCATION /usr/local/lib/libhiredis.a
+)
+target_include_directories(hiredis::hiredis INTERFACE /usr/local/include)
+
 # =========================================================================
 # 模块一：收集公共模块代码 (common)
 # =========================================================================
@@ -89,6 +95,7 @@ target_link_libraries(nutshell_online
     muduo::muduo_net
     nlohmann_json::nlohmann_json
     tinyxml2::tinyxml2
+    hiredis::hiredis
     Threads::Threads
 )
 

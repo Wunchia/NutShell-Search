@@ -2,6 +2,7 @@
 #include "common/TextUtils.h"
 #include "common/Utils.h"
 #include "common/JiebaSingleton.h"
+#include "common/Config.h"
 
 #include <cstddef>
 #include <nlohmann/json.hpp>
@@ -15,6 +16,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <muduo/base/Logging.h>
 #include <utfcpp/utf8/unchecked.h>
 #include <utility>
 #include <vector>
@@ -24,9 +26,9 @@
 // ====================================
 WebSearchService::WebSearchService()
 {
-    _stopWords=load_stop_words("../data/stopwords/cn_stopwords.txt");
-    std::cout<<"[WebSearch] Loaded "<<_stopWords.size()
-        <<" stopwords "<<std::endl;
+    _stopWords=load_stop_words(
+        Config::instance().get("STOPWORDS_CN_PATH", "../data/stopwords/cn_stopwords.txt"));
+    LOG_INFO<<"Loaded "<<_stopWords.size()<<" stopwords";
 }
 
 // =====================================
@@ -56,8 +58,7 @@ void WebSearchService::load(const std::string& invertPath,
                 _invertedIndex[word][docId]=weight;
             }
         }
-        std::cout<<"[WebSearch] Loaded inverted index: "
-            <<_invertedIndex.size()<<" keywords "<<std::endl;
+        LOG_INFO<<"Loaded inverted index: "<<_invertedIndex.size()<<" keywords";
     }
 
     {
@@ -74,8 +75,7 @@ void WebSearchService::load(const std::string& invertPath,
             _offsets[docId]={pos,len};
         }
         _docCount=static_cast<int>(_offsets.size());
-        std::cout<<"[WebSearch] Loaded offsets: "
-            <<_docCount<<" documents"<<std::endl;
+        LOG_INFO<<"Loaded offsets: "<<_docCount<<" documents";
     }
 
     //保存网页库路径
@@ -231,9 +231,7 @@ std::string WebSearchService::query(const std::string& queryText,int topK)
         result.push_back(item);
     }
 
-    std::cout<<"[WebSearch] query(\""<<queryText
-        <<"\") -> "<<scoredDocs.size()<<" matches,top "
-        <<limit<<std::endl;
+    LOG_INFO<<"query("<<queryText<<") -> "<<scoredDocs.size()<<" matches";
 
     return result.dump();
 }
@@ -360,10 +358,12 @@ std::string WebSearchService::generateAbstract(
 
         // 拼接输出
         std::string result;
+        const size_t maxResultLen=200;//总上限200字
         for(size_t m=0;m<merged.size();++m){
+            if(result.size()>=maxResultLen){break;}//已达上限则停止
             if(m>0)result+=" ... ";
             for(size_t i=merged[m].start;
-                i<merged[m].end&&i<totalChars;++i){
+                i<merged[m].end&&i<totalChars&&result.size()<maxResultLen;++i){
                     result+=chars[i];
                 }
         }

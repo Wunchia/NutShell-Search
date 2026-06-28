@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <utfcpp/utf8.h>
 #include <algorithm>
+#include <muduo/base/Logging.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -27,8 +28,7 @@ KeywordService::loadDict(const std::string& path){
     while(ifs>>word>>freq){
         dict.emplace_back(word,freq);
     }
-    std::cout<<"[KeywordService] Loaded "<<path
-        <<": "<<dict.size()<<" entries"<<std::endl;
+    LOG_INFO<<"Loaded dict "<<path<<": "<<dict.size()<<" entries";
 
     return dict;
 }
@@ -52,8 +52,7 @@ KeywordService::loadIndex(const std::string& path){
         }
     }
 
-    std::cout<<"[KeywordService] Loaded "<<path
-             <<" : "<<index.size()<<" keys "<<std::endl;
+    LOG_INFO<<"Loaded index "<<path<<": "<<index.size()<<" keys";
 
     return index;
 }

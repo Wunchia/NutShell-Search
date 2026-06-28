@@ -1,6 +1,8 @@
 #include "online/KeywordService.h"
 #include "online/WebSearchService.h"
 #include "online/TlvCodec.h"
+#include "common/CacheManager.h"
+#include "common/Config.h"
 
 #include <muduo/base/Timestamp.h>
 #include <muduo/net/Buffer.h>
@@ -11,6 +13,7 @@
 #include <muduo/net/http/HttpServer.h>
 #include <muduo/net/http/HttpRequest.h>
 #include <muduo/net/http/HttpResponse.h>
+#include <muduo/base/Logging.h>
 
 #include <fstream>
 #include <iostream>
@@ -18,6 +21,17 @@
 
 int main()
 {
+    // 加载配置文件
+    Config::instance().load("../conf/config.conf");
+    auto& cfg = Config::instance();
+
+    // 从配置读取日志级别
+    std::string logLevel = cfg.get("LOG_LEVEL", "INFO");
+    if (logLevel == "DEBUG")      muduo::Logger::setLogLevel(muduo::Logger::DEBUG);
+    else if (logLevel == "WARN")  muduo::Logger::setLogLevel(muduo::Logger::WARN);
+    else if (logLevel == "ERROR") muduo::Logger::setLogLevel(muduo::Logger::ERROR);
+    else                           muduo::Logger::setLogLevel(muduo::Logger::INFO);
+
     //事件循环
     muduo::net::EventLoop loop;
     //监听地址
@@ -27,16 +41,24 @@ int main()
 
     //加载关键字推荐的离线数据
     KeywordService keywordService;
-    keywordService.load("../data/index/dict_en.dat",
-        "../data/index/index_en.dat",
-        "../data/index/dict_cn.dat",
-        "../data/index/index_cn.dat");
+    keywordService.load(
+        cfg.get("KEYWORD_DICT_EN_PATH",  "../data/index/dict_en.dat"),
+        cfg.get("KEYWORD_INDEX_EN_PATH", "../data/index/index_en.dat"),
+        cfg.get("KEYWORD_DICT_CN_PATH",  "../data/index/dict_cn.dat"),
+        cfg.get("KEYWORD_INDEX_CN_PATH", "../data/index/index_cn.dat"));
 
     //加载网页搜索的离线数据
     WebSearchService webSearchService;
-    webSearchService.load("../data/index/invert_index.dat",
-        "../data/index/pages.dat",
-        "../data/index/offsets.dat");
+    webSearchService.load(
+        cfg.get("WEBPAGE_INVERT_PATH",  "../data/index/invert_index.dat"),
+        cfg.get("WEBPAGE_PAGELIB_PATH", "../data/index/pages.dat"),
+        cfg.get("WEBPAGE_OFFSET_PATH",  "../data/index/offsets.dat"));
+
+    //初始化缓存（Redis 连不上就纯 L1运行）
+    CacheManager cache;
+    cache.initRedis(
+        cfg.get("REDIS_HOST", "127.0.0.1"),
+        cfg.getInt("REDIS_PORT", 6379));
 
     //TLV编解码器
     TlvCodec codec([&](
@@ -44,31 +66,36 @@ int main()
         const Message& msg,Timestamp){
             //根据type分发 1=关键字推荐, 2=网页搜索
             if(msg.type==1){
-                std::string result=keywordService.query(msg.value);
+                std::string result;
+                if(!cache.getKeyword(msg.value,result)){
+                    result=keywordService.query(msg.value);
+                    cache.putKeyword(msg.value,result);
+                }
                 Message response;
                 response.type=1;
                 response.value=result;
                 codec.send(conn,response);
-                std::cout<<"[keyword] querry: "<<msg.value
-                    <<" -> "<<result<<std::endl;
+                LOG_INFO<<"[keyword]"<<msg.value;
             }else if(msg.type==2){
-                std::string result=webSearchService.query(msg.value);
+                std::string result;
+                if(!cache.getSearch(msg.value,result)){
+                    result=webSearchService.query(msg.value);
+                    cache.putSearch(msg.value, result);
+                }
                 Message response;
                 response.type=2;
                 response.value=result;
                 codec.send(conn,response);
-                std::cout<<"[PageSearch] querry: "<<msg.value
-                    <<" -> "<<result.size()<<" bytes"<<std::endl;
+                LOG_INFO<<"[PageSearch]"<<msg.value<<" -> "<<result.size()<<" bytes";
             }
         });
     //注册链接回调
     server.setConnectionCallback(
         [](const muduo::net::TcpConnectionPtr& conn){
             if(conn->connected()){
-                std::cout<<"New connection from "
-                    <<conn->peerAddress().toIpPort()<<std::endl;
+                LOG_INFO<<"New connection from "<<conn->peerAddress().toIpPort();
             }else{
-                std::cout<<"Connection closed"<<std::endl;
+                LOG_INFO<<"Connection closed";
             }
         }
     );
@@ -80,7 +107,7 @@ int main()
             });
     //启动
     server.start();
-    std::cout<<"NutShellSearch server listening on port 8848"<<std::endl;
+    LOG_INFO<<"TLV server listening on port 8848";
 
     // ==========================================
     //  HTTP 服务 (8080) — 前端 + REST API
@@ -88,15 +115,14 @@ int main()
     // 预读前端页面到内存（启动时读一次，之后所有请求直接返回）
     std::string indexHtml;
     {
-        std::ifstream ifs("../static/index.html");
+        std::ifstream ifs(cfg.get("STATIC_DIR", "../static") + "/index.html");
         if (ifs) {
             std::ostringstream oss;
             oss << ifs.rdbuf();
             indexHtml = oss.str();
-            std::cout << "[HTTP] Loaded index.html: "
-                << indexHtml.size() << " bytes" << std::endl;
+            LOG_INFO<<"Loaded index.html: "<<indexHtml.size()<<" bytes";
         } else {
-            std::cerr << "[HTTP] WARNING: ../static/index.html not found!" << std::endl;
+            LOG_ERROR<<"index.html not found!";
         }
     }
 
@@ -154,14 +180,17 @@ int main()
                 std::string q = getQueryParam("q");
                 std::string json;
                 if (!q.empty()) {
+                    if(!cache.getKeyword(q,json)){
                     json = keywordService.query(q, 8);
+                    cache.putKeyword(q, json);
+                    }
                 } else {
                     json = "[]";
                 }
                 resp->setStatusCode(muduo::net::HttpResponse::k200Ok);
                 resp->setContentType("application/json; charset=utf-8");
                 resp->setBody(json);
-                std::cout << "[HTTP] keyword?q=" << q << std::endl;
+                LOG_INFO<<"[HTTP] keyword?q="<<q;
                 return;
             }
 
@@ -172,20 +201,23 @@ int main()
                 std::string q = getQueryParam("q");
                 std::string json;
                 if (!q.empty()) {
+                    if(!cache.getSearch(q, json)){
                     json = webSearchService.query(q, 10);
+                    cache.putSearch(q, json);
+                    }
                 } else {
                     json = "[]";
                 }
                 resp->setStatusCode(muduo::net::HttpResponse::k200Ok);
                 resp->setContentType("application/json; charset=utf-8");
                 resp->setBody(json);
-                std::cout << "[HTTP] search?q=" << q << std::endl;
+                LOG_INFO<<"[HTTP] search?q="<<q;
                 return;
             }
 
             // 静态资源：背景图片
             if (basePath == "/background.png") {
-                std::ifstream ifs("../static/background.png", std::ios::binary);
+                std::ifstream ifs(cfg.get("STATIC_DIR", "../static") + "/background.png", std::ios::binary);
                 if (ifs) {
                     std::string img((std::istreambuf_iterator<char>(ifs)),
                         std::istreambuf_iterator<char>());
@@ -207,10 +239,7 @@ int main()
         });
 
     httpServer.start();
-    std::cout << "NutShellSearch HTTP server listening on port 8080" << std::endl;
-    // ==========================================
-    //  HTTP 服务 (8080) — 前端 + REST API
-    // ==========================================
+    LOG_INFO<<"HTTP Server listening on port 8080";
 
     loop.loop();
 
